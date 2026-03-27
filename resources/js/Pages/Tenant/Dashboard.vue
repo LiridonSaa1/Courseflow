@@ -10,190 +10,474 @@ const props = defineProps({
     recentAttempts: { type: Array, default: () => [] },
     stat: { type: Object, default: null },
     chartActivity: { type: Array, default: () => [0, 0, 0, 0, 0, 0, 0] },
+    workspaceStats: { type: Object, default: () => ({}) },
 });
 
-const palette = ['bg-blue-500', 'bg-violet-500', 'bg-orange-500', 'bg-rose-500', 'bg-emerald-500', 'bg-amber-500'];
+const productImages = [
+    '/inapp/images/product-1.png',
+    '/inapp/images/product-2.png',
+    '/inapp/images/product-3.png',
+    '/inapp/images/product-4.png',
+    '/inapp/images/product-5.png',
+    '/inapp/images/product-6.png',
+    '/inapp/images/product-7.png',
+    '/inapp/images/product-8.png',
+    '/inapp/images/product-9.png',
+    '/inapp/images/product-10.png',
+];
 
-function rowIconClass(i) {
-    return palette[i % palette.length];
-}
-
-const dateSubtitle = computed(() => {
-    const now = new Date();
-    const end = now.getDate();
-    const month = now.toLocaleString('en', { month: 'long' });
-    const year = now.getFullYear();
-
-    return `01 – ${end} ${month}, ${year}`;
-});
-
-const barMeta = computed(() => {
-    const raw = props.chartActivity.length ? props.chartActivity : [0, 0, 0, 0, 0, 0, 0];
-    const max = Math.max(...raw, 1);
-    const highlightIdx = raw.indexOf(Math.max(...raw));
-
-    return raw.map((n, idx) => ({
-        h: 28 + Math.round((n / max) * 72),
-        strong: idx === highlightIdx && n > 0,
-    }));
-});
-
-const avgProgressPercent = computed(() => {
-    const rows = props.progress || [];
-    if (!rows.length) {
-        return 0;
-    }
-    const sum = rows.reduce((acc, p) => acc + (Number(p.percent) || 0), 0);
-
-    return Math.round(sum / rows.length);
-});
+const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const canManageCourses = computed(
     () => props.roleNames.includes('owner') || props.roleNames.includes('teacher'),
 );
+const workspaceStats = computed(() => props.workspaceStats || {});
+
+const todayLabel = computed(() => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+});
+
+const safeActivity = computed(() => {
+    const raw = Array.isArray(props.chartActivity) ? props.chartActivity.slice(0, 7) : [];
+    const fallback = [0, 0, 0, 0, 0, 0, 0];
+    const merged = [...fallback];
+
+    raw.forEach((v, i) => {
+        merged[i] = Number(v) || 0;
+    });
+
+    return merged;
+});
+
+const totalActivity = computed(() => safeActivity.value.reduce((sum, n) => sum + n, 0));
+
+const avgProgressPercent = computed(() => {
+    if (!props.progress.length) {
+        return 0;
+    }
+    const sum = props.progress.reduce((acc, row) => acc + (Number(row.percent) || 0), 0);
+    return Math.round(sum / props.progress.length);
+});
+
+const completionRate = computed(() => {
+    if (!props.progress.length) {
+        return 0;
+    }
+
+    const completed = props.progress.filter((row) => Number(row.percent) >= 100).length;
+    return Math.round((completed / props.progress.length) * 100);
+});
+
+const scoreAverage = computed(() => {
+    if (!props.recentAttempts.length) {
+        return 0;
+    }
+    const avg =
+        props.recentAttempts.reduce((sum, attempt) => {
+            const max = Number(attempt.max_score) || 0;
+            if (!max) {
+                return sum;
+            }
+            return sum + (Number(attempt.score) / max) * 100;
+        }, 0) / props.recentAttempts.length;
+    return Math.round(avg);
+});
+
+const bestScore = computed(() => {
+    if (!props.recentAttempts.length) {
+        return 0;
+    }
+    return Math.max(
+        ...props.recentAttempts.map((attempt) => {
+            const max = Number(attempt.max_score) || 0;
+            if (!max) {
+                return 0;
+            }
+            return Math.round((Number(attempt.score) / max) * 100);
+        }),
+    );
+});
+
+const activityBars = computed(() => {
+    const raw = safeActivity.value;
+    const max = Math.max(...raw, 1);
+    const maxIndex = raw.indexOf(Math.max(...raw));
+
+    return raw.map((value, index) => {
+        const scaled = 18 + Math.round((value / max) * 82);
+
+        return {
+            label: weekLabels[index] ?? `D${index + 1}`,
+            height: scaled,
+            strong: index === maxIndex && value > 0,
+            value,
+        };
+    });
+});
+
+const summaryCards = computed(() => [
+    {
+        label: 'Total Courses',
+        value: workspaceStats.value.courses ?? props.courses.length,
+        delta: '+5% since last month',
+        color: 'text-[#e66239]',
+        tint: 'bg-[#e66239]/10 border-[#e66239]/25',
+        iconBg: 'bg-[#e66239]',
+    },
+    {
+        label: 'Total Students',
+        value: workspaceStats.value.students ?? 0,
+        delta: '+22% since last month',
+        color: 'text-emerald-600',
+        tint: 'bg-emerald-100 border-emerald-200',
+        iconBg: 'bg-emerald-500',
+    },
+    {
+        label: 'Total Teachers',
+        value: workspaceStats.value.teachers ?? 0,
+        delta: '+10% since last month',
+        color: 'text-sky-600',
+        tint: 'bg-sky-100 border-sky-200',
+        iconBg: 'bg-sky-500',
+    },
+    {
+        label: 'Quiz Attempts (7d)',
+        value: totalActivity.value,
+        delta: '+35% since last month',
+        color: 'text-amber-600',
+        tint: 'bg-amber-100 border-amber-200',
+        iconBg: 'bg-amber-500',
+    },
+]);
+
+const insightCards = computed(() => [
+    {
+        label: 'Total XP',
+        value: props.stat?.xp ?? 0,
+        trend: '+35% vs last month',
+        trendColor: 'text-emerald-600',
+        iconColor: 'text-[#e66239]',
+    },
+    {
+        label: 'Level',
+        value: props.stat?.level ?? 0,
+        trend: '-20% vs last month',
+        trendColor: 'text-red-500',
+        iconColor: 'text-red-500',
+    },
+    {
+        label: 'Streak (days)',
+        value: props.stat?.streak_days ?? 0,
+        trend: '-20% vs last month',
+        trendColor: 'text-amber-600',
+        iconColor: 'text-amber-500',
+    },
+]);
+
+const topCourses = computed(() =>
+    props.courses.slice(0, 5).map((course, index) => ({
+        id: course.id,
+        title: course.title,
+        modules: course.modules_count ?? 0,
+        classes: course.study_classes_count ?? 0,
+        image: productImages[index % productImages.length],
+        growth: [18, 32, 22, 28, 25][index % 5],
+    })),
+);
+
+const lowProgressRows = computed(() => {
+    const rows = [...props.progress]
+        .sort((a, b) => (Number(a.percent) || 0) - (Number(b.percent) || 0))
+        .slice(0, 5);
+
+    return rows.map((row, index) => ({
+        id: row.id ?? `${index}-${row.lesson_id ?? 'lesson'}`,
+        title: row.lesson?.title || `Lesson #${row.lesson_id ?? index + 1}`,
+        lessonId: row.lesson_id ?? '-',
+        percent: Number(row.percent) || 0,
+        image: productImages[(index + 5) % productImages.length],
+    }));
+});
+
+const recentAttemptRows = computed(() =>
+    props.recentAttempts.slice(0, 5).map((attempt, index) => ({
+        id: attempt.id ?? `${index}-attempt`,
+        title: `Quiz Attempt #${attempt.id ?? index + 1}`,
+        subtitle: `${attempt.score ?? 0} / ${attempt.max_score ?? 0}`,
+        status: String(attempt.status || 'pending'),
+        image: productImages[(index + 2) % productImages.length],
+    })),
+);
+
+function growthBadgeClass(index) {
+    const variants = [
+        'bg-red-50 text-red-600 border-red-200',
+        'bg-blue-50 text-blue-600 border-blue-200',
+        'bg-cyan-50 text-cyan-600 border-cyan-200',
+        'bg-emerald-50 text-emerald-600 border-emerald-200',
+        'bg-amber-50 text-amber-600 border-amber-200',
+    ];
+
+    return variants[index % variants.length];
+}
+
+function statusBadgeClass(status) {
+    const normalized = String(status || '').toLowerCase();
+
+    if (['completed', 'passed', 'success'].includes(normalized)) {
+        return 'bg-emerald-50 text-emerald-600 border-emerald-200';
+    }
+    if (['processing', 'in_progress', 'started'].includes(normalized)) {
+        return 'bg-blue-50 text-blue-600 border-blue-200';
+    }
+    if (['pending', 'queued', 'draft'].includes(normalized)) {
+        return 'bg-amber-50 text-amber-600 border-amber-200';
+    }
+
+    return 'bg-red-50 text-red-600 border-red-200';
+}
 </script>
 
 <template>
     <TenantLayout>
         <Head title="Dashboard" />
 
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">Dashboard</h1>
-                <p class="mt-1 text-sm text-neutral-600">{{ dateSubtitle }}</p>
-                <p class="mt-0.5 text-xs text-neutral-500">{{ roleNames.join(', ') }}</p>
-            </div>
-            <div class="flex -space-x-2">
-                <div
-                    v-for="i in 4"
-                    :key="i"
-                    class="flex size-9 items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-indigo-400 to-violet-600 text-[10px] font-semibold text-white"
-                >
-                    {{ String.fromCharCode(64 + i) }}
-                </div>
-                <Link
-                    v-if="canManageCourses"
-                    href="/courses/create"
-                    class="flex size-9 items-center justify-center rounded-full border-2 border-dashed border-neutral-200 bg-white text-lg leading-none text-neutral-400 hover:border-indigo-300 hover:text-indigo-600"
-                    aria-label="New course"
-                >
-                    +
-                </Link>
-            </div>
-        </div>
-
-        <div class="mt-8 flex h-32 items-end justify-between gap-1 sm:gap-1.5" aria-hidden="true">
-            <div
-                v-for="(bar, idx) in barMeta"
-                :key="idx"
-                class="flex-1 rounded-t-md transition-all"
-                :class="bar.strong ? 'bg-blue-500' : 'bg-blue-200/80'"
-                :style="{ height: bar.h + 'px' }"
-            />
-        </div>
-
-        <div v-if="stat" class="mt-8 grid gap-3 sm:grid-cols-3">
-            <div class="rounded-xl border border-neutral-200 bg-neutral-50/80 px-4 py-3">
-                <p class="text-xs font-medium uppercase tracking-wide text-neutral-500">XP</p>
-                <p class="mt-1 text-xl font-semibold text-indigo-600">{{ stat.xp }}</p>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-neutral-50/80 px-4 py-3">
-                <p class="text-xs font-medium uppercase tracking-wide text-neutral-500">Level</p>
-                <p class="mt-1 text-xl font-semibold text-neutral-900">{{ stat.level }}</p>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-neutral-50/80 px-4 py-3">
-                <p class="text-xs font-medium uppercase tracking-wide text-neutral-500">Streak (days)</p>
-                <p class="mt-1 text-xl font-semibold text-emerald-600">{{ stat.streak_days }}</p>
-            </div>
-        </div>
-
-        <section id="courses" class="mt-10 scroll-mt-6">
-            <div class="flex items-center justify-between">
-                <h2 class="text-base font-bold text-neutral-900">Courses</h2>
-                <button type="button" class="rounded-md p-1 text-neutral-400 hover:bg-neutral-100" aria-label="More">⋯</button>
-            </div>
-            <ul class="mt-4 divide-y divide-neutral-100 border-t border-neutral-100">
-                <li v-for="(c, i) in courses" :key="c.id" class="flex items-center gap-4 py-4">
-                    <div
-                        class="flex size-11 shrink-0 items-center justify-center rounded-full text-white shadow-sm"
-                        :class="rowIconClass(i)"
-                    >
-                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                            />
-                        </svg>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <Link :href="`/courses/${c.id}`" class="font-semibold text-neutral-900 hover:text-indigo-600">
-                            {{ c.title }}
-                        </Link>
-                        <p class="mt-0.5 text-sm text-neutral-600">
-                            {{ c.language }} · {{ c.level }}
-                        </p>
-                    </div>
-                    <span class="shrink-0 text-sm font-medium text-neutral-700">{{ c.modules_count }} modules</span>
-                </li>
-                <li v-if="!courses.length" class="py-10 text-center text-sm text-neutral-500">No courses yet.</li>
-            </ul>
-        </section>
-
-        <section v-if="recentAttempts.length" class="mt-10">
-            <h2 class="text-base font-bold text-neutral-900">Recent quiz attempts</h2>
-            <ul class="mt-3 space-y-2 text-sm text-neutral-600">
-                <li v-for="a in recentAttempts" :key="a.id" class="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-                    {{ a.score }} / {{ a.max_score }} · {{ a.status }}
-                </li>
-            </ul>
-        </section>
-
-        <template #aside>
-            <div>
-                <h2 class="text-base font-bold text-neutral-900">Learning progress</h2>
-                <p class="mt-1 text-xs text-neutral-500">Based on your lesson progress records.</p>
-
-                <div class="mt-6">
-                    <div class="flex items-center justify-between text-sm">
-                        <span class="font-medium text-neutral-800">Overall</span>
-                        <span class="font-semibold text-neutral-900">{{ avgProgressPercent }}%</span>
-                    </div>
-                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-200/80">
-                        <div class="h-full rounded-full bg-teal-500 transition-all" :style="{ width: avgProgressPercent + '%' }" />
-                    </div>
+        <section class="space-y-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h1 class="text-[1.5rem] font-semibold text-[#171717] sm:text-[1.75rem]">Dashboard</h1>
+                    <p class="text-sm text-neutral-500">Your tenant overview panel for courses, progress, and activity.</p>
+                    <p class="mt-1 text-xs text-neutral-500">{{ todayLabel }}</p>
                 </div>
 
-                <div class="mt-8">
-                    <h3 class="text-sm font-semibold text-neutral-800">Recent attempts</h3>
-                    <ul class="mt-3 space-y-2 text-xs text-neutral-600">
-                        <li v-for="a in recentAttempts.slice(0, 4)" :key="a.id">{{ a.score }} / {{ a.max_score }} · {{ a.status }}</li>
-                        <li v-if="!recentAttempts.length" class="text-neutral-500">No attempts yet.</li>
-                    </ul>
-                </div>
-
-                <div class="mt-10 rounded-2xl border border-neutral-200/80 bg-slate-100/80 p-5">
-                    <div class="mb-4 flex justify-center text-neutral-400">
-                        <svg class="size-16" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <rect x="12" y="20" width="40" height="36" rx="2" class="fill-neutral-300" />
-                            <rect x="16" y="16" width="12" height="8" rx="1" class="fill-neutral-400" />
-                            <path d="M28 12c0-2 2-4 4-4s4 2 4 4v4H28v-4z" class="fill-emerald-600" />
-                        </svg>
-                    </div>
-                    <h3 class="text-center text-sm font-bold text-neutral-900">Grow your school</h3>
-                    <p class="mt-2 text-center text-xs leading-relaxed text-neutral-600">
-                        Create a course, add modules and lessons, then invite students from the Students page.
-                    </p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs text-neutral-600">
+                        {{ roleNames.join(', ') || 'Member' }}
+                    </span>
                     <Link
                         v-if="canManageCourses"
                         href="/courses/create"
-                        class="mt-4 flex w-full items-center justify-center rounded-xl bg-neutral-900 py-3 text-xs font-semibold uppercase tracking-wide text-white hover:bg-neutral-800"
+                        class="rounded-lg bg-[#e66239] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#cf5330]"
                     >
-                        New course
+                        Add Course
                     </Link>
                 </div>
             </div>
-        </template>
+
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <article
+                    v-for="card in summaryCards"
+                    :key="card.label"
+                    class="rounded-lg border p-4 shadow-sm"
+                    :class="card.tint"
+                >
+                    <div class="flex items-start gap-3">
+                        <div
+                            class="inline-flex size-10 items-center justify-center rounded-md text-white"
+                            :class="card.iconBg"
+                        >
+                            <svg viewBox="0 0 24 24" class="size-5" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M4 4h16v16H4z" />
+                                <path d="M8 12h8" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm text-neutral-600">{{ card.label }}</p>
+                            <p class="mt-1 text-2xl font-bold text-[#171717]">{{ card.value }}</p>
+                            <p class="mt-1 text-xs" :class="card.color">{{ card.delta }}</p>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="grid gap-3 xl:grid-cols-3">
+                <article
+                    v-for="insight in insightCards"
+                    :key="insight.label"
+                    class="rounded-lg border border-neutral-200 bg-white shadow-sm"
+                >
+                    <div class="p-4">
+                        <div class="mb-4 flex items-center justify-between border-b border-neutral-200 pb-5">
+                            <div>
+                                <p class="text-2xl font-bold text-[#171717]">{{ insight.value }}</p>
+                                <p class="text-sm text-neutral-600">{{ insight.label }}</p>
+                            </div>
+                            <svg
+                                viewBox="0 0 24 24"
+                                class="size-8"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8"
+                                :class="insight.iconColor"
+                            >
+                                <path d="M5 12h14" />
+                                <path d="M12 5v14" />
+                            </svg>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <p class="text-neutral-500">
+                                <span :class="insight.trendColor">{{ insight.trend.split(' ')[0] }}</span>
+                                {{ insight.trend.replace(insight.trend.split(' ')[0], '') }}
+                            </p>
+                            <a href="#courses" class="text-[#e66239] underline-offset-2 hover:underline">View</a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="grid gap-3 2xl:grid-cols-2">
+                <article class="rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                        <h2 class="text-base font-semibold text-[#171717]">Activity vs Attempts</h2>
+                        <select class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600">
+                            <option>This Week</option>
+                            <option>This Month</option>
+                            <option>This Year</option>
+                        </select>
+                    </header>
+                    <div class="p-4">
+                        <div class="flex h-56 items-end gap-2">
+                            <div
+                                v-for="bar in activityBars"
+                                :key="bar.label"
+                                class="flex min-w-0 flex-1 flex-col items-center justify-end"
+                            >
+                                <div class="w-full rounded-t-md transition-all" :class="bar.strong ? 'bg-[#e66239]' : 'bg-[#e66239]/25'" :style="{ height: bar.height + '%' }" />
+                                <p class="mt-2 text-[11px] text-neutral-500">{{ bar.label }}</p>
+                                <p class="text-[10px] text-neutral-400">{{ bar.value }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                        <h2 class="text-base font-semibold text-[#171717]">Overall Information</h2>
+                        <select class="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600">
+                            <option>Last 6 Months</option>
+                            <option>This Month</option>
+                            <option>This Week</option>
+                        </select>
+                    </header>
+                    <div class="p-4">
+                        <h3 class="text-sm font-semibold text-[#171717]">Learning Overview</h3>
+                        <div class="mt-3 grid items-center gap-4 sm:grid-cols-2">
+                            <div class="mx-auto">
+                                <div
+                                    class="relative grid size-40 place-items-center rounded-full"
+                                    :style="{ background: `conic-gradient(#e66239 ${completionRate}%, #eceff3 0)` }"
+                                >
+                                    <div class="grid size-28 place-items-center rounded-full bg-white text-center">
+                                        <p class="text-2xl font-semibold text-[#171717]">{{ completionRate }}%</p>
+                                        <p class="text-[11px] text-neutral-500">Completion</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="rounded-lg border border-neutral-200 p-3 text-center">
+                                    <p class="text-xl font-semibold text-[#171717]">{{ bestScore }}%</p>
+                                    <p class="text-xs text-emerald-600">Best score</p>
+                                </div>
+                                <div class="rounded-lg border border-neutral-200 p-3 text-center">
+                                    <p class="text-xl font-semibold text-[#171717]">{{ scoreAverage }}%</p>
+                                    <p class="text-xs text-amber-600">Average score</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 grid grid-cols-4 gap-2 border-t border-neutral-200 pt-4 text-center">
+                            <div>
+                                <p class="text-lg font-semibold text-[#171717]">{{ workspaceStats.lessons ?? 0 }}</p>
+                                <p class="text-[11px] text-neutral-500">Lessons</p>
+                            </div>
+                            <div>
+                                <p class="text-lg font-semibold text-[#171717]">{{ workspaceStats.quizzes ?? 0 }}</p>
+                                <p class="text-[11px] text-neutral-500">Quizzes</p>
+                            </div>
+                            <div>
+                                <p class="text-lg font-semibold text-[#171717]">{{ workspaceStats.liveSessions ?? 0 }}</p>
+                                <p class="text-[11px] text-neutral-500">Sessions</p>
+                            </div>
+                            <div>
+                                <p class="text-lg font-semibold text-[#171717]">{{ workspaceStats.attempts ?? 0 }}</p>
+                                <p class="text-[11px] text-neutral-500">Attempts</p>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="grid gap-3 xl:grid-cols-3">
+                <article id="courses" class="rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                        <h3 class="text-base font-semibold text-[#171717]">Top Courses</h3>
+                        <button type="button" class="rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600">Today</button>
+                    </header>
+                    <ul class="divide-y divide-neutral-200">
+                        <li v-for="(course, index) in topCourses" :key="course.id" class="flex items-center gap-3 px-4 py-3">
+                            <img :src="course.image" alt="" class="size-12 rounded-md object-cover" />
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-[#171717]">{{ course.title }}</p>
+                                <p class="mt-1 text-xs text-neutral-500">{{ course.modules }} modules &middot; {{ course.classes }} classes</p>
+                            </div>
+                            <span class="rounded-full border px-2 py-0.5 text-[11px] font-medium" :class="growthBadgeClass(index)">
+                                {{ course.growth }}%
+                            </span>
+                        </li>
+                        <li v-if="!topCourses.length" class="px-4 py-6 text-sm text-neutral-500">No courses yet.</li>
+                    </ul>
+                </article>
+
+                <article class="rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                        <h3 class="text-base font-semibold text-[#171717]">Low Progress Lessons</h3>
+                        <Link href="/analytics" class="text-xs text-[#e66239] underline-offset-2 hover:underline">View All</Link>
+                    </header>
+                    <ul class="divide-y divide-neutral-200">
+                        <li v-for="lesson in lowProgressRows" :key="lesson.id" class="flex items-center gap-3 px-4 py-3">
+                            <img :src="lesson.image" alt="" class="size-12 rounded-md object-cover" />
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-[#171717]">{{ lesson.title }}</p>
+                                <p class="mt-1 text-xs text-neutral-500">ID: #{{ lesson.lessonId }}</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-sm font-semibold text-[#e66239]">{{ lesson.percent }}%</p>
+                                <p class="text-[11px] text-neutral-500">complete</p>
+                            </div>
+                        </li>
+                        <li v-if="!lowProgressRows.length" class="px-4 py-6 text-sm text-neutral-500">
+                            No lesson progress records yet.
+                        </li>
+                    </ul>
+                </article>
+
+                <article class="rounded-lg border border-neutral-200 bg-white shadow-sm">
+                    <header class="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+                        <h3 class="text-base font-semibold text-[#171717]">Recent Quiz Attempts</h3>
+                        <button type="button" class="rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600">Weekly</button>
+                    </header>
+                    <ul class="divide-y divide-neutral-200">
+                        <li v-for="attempt in recentAttemptRows" :key="attempt.id" class="flex items-center gap-3 px-4 py-3">
+                            <img :src="attempt.image" alt="" class="size-12 rounded-md object-cover" />
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-sm font-medium text-[#171717]">{{ attempt.title }}</p>
+                                <p class="mt-1 text-xs text-neutral-500">{{ attempt.subtitle }}</p>
+                            </div>
+                            <span class="rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize" :class="statusBadgeClass(attempt.status)">
+                                {{ attempt.status.replace('_', ' ') }}
+                            </span>
+                        </li>
+                        <li v-if="!recentAttemptRows.length" class="px-4 py-6 text-sm text-neutral-500">
+                            No recent attempts found.
+                        </li>
+                    </ul>
+                </article>
+            </div>
+        </section>
     </TenantLayout>
 </template>

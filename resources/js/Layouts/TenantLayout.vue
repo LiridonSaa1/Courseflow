@@ -1,14 +1,43 @@
 <script setup>
 import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { computed, useSlots } from 'vue';
+import { computed, onMounted, onUnmounted, ref, useSlots, watch } from 'vue';
 
 const page = usePage();
 const slots = useSlots();
-const user = computed(() => page.props.auth?.user);
-const workspace = computed(() => page.props.tenantContext?.workspace ?? 'Workspace');
 const logoutForm = useForm({});
 
+const user = computed(() => page.props.auth?.user);
+const workspace = computed(() => page.props.tenantContext?.workspace ?? 'Workspace');
 const urlPath = computed(() => String(page.url || '').split('?')[0].split('#')[0] || '');
+const hasAside = computed(() => !!slots.aside);
+
+const collapsed = ref(false);
+const mobileOpen = ref(false);
+const viewportWidth = ref(0);
+const showNavText = computed(() => !collapsed.value || viewportWidth.value < 1024);
+
+const displayName = computed(() => user.value?.name || 'Tenant User');
+const username = computed(() => {
+    const email = user.value?.email || '';
+    if (!email.includes('@')) {
+        return `@${String(displayName.value || '').toLowerCase().replace(/\s+/g, '') || 'user'}`;
+    }
+
+    return `@${email.split('@')[0]}`;
+});
+
+const navMain = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Courses', href: '/courses' },
+    { label: 'Students', href: '/students' },
+    { label: 'Teachers', href: '/teachers' },
+    { label: 'Analytics', href: '/analytics' },
+    { label: 'Live Sessions', href: '/live-sessions' },
+    { label: 'Community', href: '/community' },
+    { label: 'Certificates', href: '/certificates' },
+];
+
+const navAccount = [{ label: 'Profile', href: '/dashboard' }];
 
 function navActive(href) {
     const path = urlPath.value || '';
@@ -20,112 +49,228 @@ function navActive(href) {
     return path === href || path.startsWith(`${href}/`);
 }
 
-const initials = computed(() => {
-    const n = user.value?.name || user.value?.email || '?';
-    const parts = String(n).trim().split(/\s+/);
+function closeMobile() {
+    mobileOpen.value = false;
+}
 
-    return parts.length >= 2
-        ? (parts[0][0] + parts[1][0]).toUpperCase()
-        : String(n).slice(0, 2).toUpperCase();
-});
+function toggleSidebar() {
+    if (window.innerWidth < 1024) {
+        mobileOpen.value = !mobileOpen.value;
+        return;
+    }
+
+    collapsed.value = !collapsed.value;
+}
+
+function onResize() {
+    viewportWidth.value = window.innerWidth;
+
+    if (window.innerWidth >= 1024) {
+        mobileOpen.value = false;
+    }
+}
 
 function logout() {
     logoutForm.post('/logout');
 }
 
-const nav = [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Courses', href: '/courses' },
-    { label: 'Students', href: '/students' },
-    { label: 'Teachers', href: '/teachers' },
-    { label: 'Analytics', href: '/analytics' },
-    { label: 'Live classes', href: '/live-sessions' },
-    { label: 'Community', href: '/community' },
-    { label: 'Certificates', href: '/certificates' },
-];
+watch(
+    () => page.url,
+    () => {
+        mobileOpen.value = false;
+    },
+);
 
-const hasAside = computed(() => !!slots.aside);
+watch(collapsed, (value) => {
+    try {
+        localStorage.setItem('tenant.sidebar.collapsed', value ? '1' : '0');
+    } catch {
+        // Ignore localStorage failures.
+    }
+});
+
+onMounted(() => {
+    try {
+        collapsed.value = localStorage.getItem('tenant.sidebar.collapsed') === '1';
+    } catch {
+        collapsed.value = false;
+    }
+
+    onResize();
+    window.addEventListener('resize', onResize);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', onResize);
+});
 </script>
 
 <template>
-    <div class="min-h-screen bg-neutral-100 px-3 py-4 sm:px-5 sm:py-6 md:px-8 md:py-8">
+    <div class="tenant-inapp min-h-screen bg-[#f6f7fb] text-[#171717]">
         <div
-            class="mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1440px] flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-xl ring-1 ring-black/5 md:min-h-[calc(100vh-4rem)] md:flex-row"
+            v-if="mobileOpen"
+            class="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px] lg:hidden"
+            @click="closeMobile"
+        />
+
+        <header
+            class="fixed top-0 z-30 flex h-[60px] items-center justify-between border-b border-neutral-200 bg-white px-3 transition-all duration-300 sm:px-4"
+            :class="[collapsed ? 'lg:left-[60px]' : 'lg:left-[240px]', 'left-0 right-0']"
         >
-            <aside
-                class="flex w-full shrink-0 flex-col border-b border-white/5 bg-[#1a1a1a] md:w-60 md:border-b-0 md:border-r md:border-white/5"
+            <button
+                type="button"
+                class="inline-flex size-8 items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-600 transition hover:bg-neutral-100"
+                aria-label="Toggle sidebar"
+                @click="toggleSidebar"
             >
-                <div class="px-5 pb-2 pt-6 md:px-6">
-                    <p class="truncate text-xs font-medium uppercase tracking-wide text-neutral-500">{{ workspace }}</p>
-                </div>
+                <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 6h16" />
+                    <path d="M4 12h16" />
+                    <path d="M4 18h16" />
+                </svg>
+            </button>
 
-                <div class="flex items-start gap-3 px-5 pb-6 md:px-6">
-                    <div class="relative shrink-0">
-                        <div
-                            class="flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white"
-                        >
-                            {{ initials }}
-                        </div>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-semibold text-white">{{ user?.name || 'User' }}</p>
-                        <p class="truncate text-xs text-neutral-400">{{ user?.email }}</p>
-                        <p v-if="user?.roles?.length" class="mt-1 truncate text-[10px] text-neutral-500">
-                            {{ user.roles.join(', ') }}
-                        </p>
+            <div class="flex items-center gap-2 sm:gap-3">
+                <button
+                    type="button"
+                    class="relative inline-flex size-8 items-center justify-center rounded-full border border-neutral-200 bg-neutral-50 text-neutral-600 transition hover:bg-neutral-100"
+                    aria-label="Notifications"
+                >
+                    <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M10 18a2 2 0 0 0 4 0" />
+                        <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2Z" />
+                    </svg>
+                    <span class="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">2</span>
+                </button>
+
+                <div class="hidden items-center gap-2 sm:flex">
+                    <img :src="'/inapp/images/avatar-1.jpg'" alt="User avatar" class="size-8 rounded-full object-cover" />
+                    <div class="text-right">
+                        <p class="text-sm font-semibold leading-none text-neutral-900">{{ displayName }}</p>
+                        <p class="mt-1 text-xs text-neutral-500">{{ username }}</p>
                     </div>
                 </div>
+            </div>
+        </header>
 
-                <nav class="flex flex-row gap-1 overflow-x-auto px-3 pb-4 md:flex-col md:px-4 md:pb-6">
-                    <Link
-                        v-for="item in nav"
-                        :key="item.href"
-                        :href="item.href"
-                        :class="[
-                            'shrink-0 rounded-lg px-3 py-2.5 text-sm md:px-3.5',
-                            navActive(item.href)
-                                ? 'bg-white/10 font-semibold text-white'
-                                : 'font-medium text-neutral-400 hover:bg-white/5 hover:text-white',
-                        ]"
+        <aside
+            class="fixed left-0 top-0 z-40 h-screen border-r border-neutral-200 bg-white pt-[60px] transition-all duration-300"
+            :class="[
+                collapsed ? 'w-[60px] lg:w-[60px]' : 'w-[240px]',
+                mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+            ]"
+        >
+            <div class="absolute left-0 top-0 flex h-[60px] w-full items-center border-b border-neutral-200 px-4">
+                <Link href="/dashboard" class="inline-flex items-center gap-2">
+                    <img :src="'/inapp/images/logo.svg'" alt="Inapp logo" class="h-6 w-auto shrink-0" />
+                    <span v-if="showNavText" class="text-sm font-semibold tracking-wide text-neutral-900">{{ workspace }}</span>
+                </Link>
+            </div>
+
+            <div class="h-full overflow-y-auto pb-6">
+                <div class="px-3 pt-3">
+                    <p
+                        class="px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-neutral-400"
+                        :class="collapsed ? 'lg:opacity-0' : ''"
                     >
-                        {{ item.label }}
-                    </Link>
-                </nav>
+                        Main
+                    </p>
+                    <nav class="mt-1 space-y-0.5">
+                        <Link
+                            v-for="item in navMain"
+                            :key="item.href"
+                            :href="item.href"
+                            :class="[
+                                'group flex items-center rounded-lg px-3 py-2 text-sm transition',
+                                navActive(item.href)
+                                    ? 'bg-[#e66239]/10 font-medium text-[#e66239]'
+                                    : 'text-neutral-700 hover:bg-[#e66239]/10 hover:text-[#e66239]',
+                            ]"
+                        >
+                            <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                                <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.9">
+                                    <path d="M4 6h16" />
+                                    <path d="M4 12h16" />
+                                    <path d="M4 18h16" />
+                                </svg>
+                            </span>
+                            <span v-if="showNavText" class="truncate">{{ item.label }}</span>
+                        </Link>
+                    </nav>
+                </div>
 
-                <div class="mt-auto hidden border-t border-white/5 px-4 py-4 md:block">
+                <div class="px-3 pt-5">
+                    <p
+                        class="px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-neutral-400"
+                        :class="collapsed ? 'lg:opacity-0' : ''"
+                    >
+                        Account
+                    </p>
+                    <nav class="mt-1 space-y-0.5">
+                        <Link
+                            v-for="item in navAccount"
+                            :key="`account-${item.href}`"
+                            :href="item.href"
+                            :class="[
+                                'group flex items-center rounded-lg px-3 py-2 text-sm transition',
+                                navActive(item.href)
+                                    ? 'bg-[#e66239]/10 font-medium text-[#e66239]'
+                                    : 'text-neutral-700 hover:bg-[#e66239]/10 hover:text-[#e66239]',
+                            ]"
+                        >
+                            <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                                <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.9">
+                                    <circle cx="12" cy="8" r="3.5" />
+                                    <path d="M4 20a8 8 0 0 1 16 0" />
+                                </svg>
+                            </span>
+                            <span v-if="showNavText" class="truncate">{{ item.label }}</span>
+                        </Link>
+                    </nav>
+                </div>
+
+                <div class="mt-5 px-3">
                     <button
                         type="button"
-                        class="w-full rounded-lg px-3 py-2 text-left text-xs font-medium text-neutral-400 transition hover:bg-white/5 hover:text-white"
+                        class="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-red-50 hover:text-red-600"
                         @click="logout"
                     >
-                        Sign out
+                        <span class="inline-flex size-5 shrink-0 items-center justify-center">
+                            <svg viewBox="0 0 24 24" class="size-4" fill="none" stroke="currentColor" stroke-width="1.9">
+                                <path d="M15 16l4-4-4-4" />
+                                <path d="M19 12H9" />
+                                <path d="M13 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7" />
+                            </svg>
+                        </span>
+                        <span v-if="showNavText" class="truncate">Sign out</span>
                     </button>
                 </div>
-            </aside>
+            </div>
+        </aside>
 
-            <div class="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
-                <main class="min-w-0 flex-1 overflow-auto bg-white text-neutral-900">
-                    <div class="p-4 md:p-8">
+        <main
+            class="pt-[76px] transition-all duration-300"
+            :class="[collapsed ? 'lg:ml-[60px]' : 'lg:ml-[240px]']"
+        >
+            <div class="px-4 pb-8 sm:px-5 lg:px-6">
+                <div v-if="hasAside" class="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div class="min-w-0">
                         <slot />
                     </div>
-                </main>
-                <aside
-                    v-if="hasAside"
-                    class="w-full shrink-0 border-t border-neutral-200/80 bg-neutral-50 text-neutral-900 lg:w-80 lg:border-l lg:border-t-0"
-                >
-                    <div class="p-4 md:p-8">
+                    <aside class="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
                         <slot name="aside" />
-                    </div>
-                </aside>
+                    </aside>
+                </div>
+                <slot v-else />
             </div>
-        </div>
-
-        <button
-            type="button"
-            class="mt-4 w-full rounded-lg py-2 text-center text-xs font-medium text-neutral-500 hover:text-neutral-800 md:hidden"
-            @click="logout"
-        >
-            Sign out
-        </button>
+        </main>
     </div>
 </template>
+
+<style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+.tenant-inapp {
+    font-family: 'Poppins', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+</style>
