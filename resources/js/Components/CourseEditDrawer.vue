@@ -21,6 +21,12 @@ const form = useForm({
 
 const levels = ['A1', 'A2', 'B1', 'B2', 'C1'];
 
+/** Menus must stack above the drawer (z-index 11000) or clicks/options break. */
+const selectMenuProps = {
+    zIndex: 12050,
+    scrollStrategy: 'close',
+};
+
 const statusItems = [
     { title: 'Draft', value: 'draft' },
     { title: 'Published', value: 'published' },
@@ -29,9 +35,18 @@ const statusItems = [
 const teacherItems = computed(() =>
     props.teachers.map((t) => ({
         title: t.user?.name ?? `Teacher #${t.id}`,
-        value: t.id,
+        value: Number(t.id),
     })),
 );
+
+/** Include DB value if it is not in the standard list (avoids empty Level select). */
+const levelSelectItems = computed(() => {
+    const extra = props.course?.level;
+    if (extra && typeof extra === 'string' && !levels.includes(extra)) {
+        return [...levels, extra];
+    }
+    return levels;
+});
 
 const canSubmit = computed(() => {
     const titleOk = String(form.title ?? '').trim().length > 0;
@@ -49,7 +64,13 @@ function applyCourse(c) {
     form.language = c.language ?? '';
     form.level = c.level ?? 'A1';
     form.description = c.description ?? '';
-    form.teacher_id = c.teacher_id ?? null;
+    const tid = c.teacher_id;
+    if (tid == null || tid === '') {
+        form.teacher_id = null;
+    } else {
+        const n = Number(tid);
+        form.teacher_id = Number.isFinite(n) ? n : null;
+    }
     form.thumbnail = c.thumbnail ?? '';
     form.status = c.status === 'published' ? 'published' : 'draft';
 }
@@ -135,7 +156,8 @@ watch(
                     v-model="form.level"
                     :error-messages="form.errors.level"
                     hide-details="auto"
-                    :items="levels"
+                    :items="levelSelectItems"
+                    :menu-props="selectMenuProps"
                     label="Level"
                     variant="outlined"
                 />
@@ -148,6 +170,7 @@ watch(
                     :items="teacherItems"
                     item-title="title"
                     item-value="value"
+                    :menu-props="selectMenuProps"
                     label="Teacher"
                     variant="outlined"
                 />
@@ -159,6 +182,7 @@ watch(
                     :items="statusItems"
                     item-title="title"
                     item-value="value"
+                    :menu-props="selectMenuProps"
                     label="Status"
                     variant="outlined"
                 />

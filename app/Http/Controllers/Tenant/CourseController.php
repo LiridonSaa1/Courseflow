@@ -145,9 +145,22 @@ class CourseController extends Controller
             $this->authorizeStaffCourse($request, $course);
         }
 
-        $course->load(['modules.lessons.quizzes']);
+        $course->load(['modules.lessons.quizzes', 'teacher.user']);
 
-        return Inertia::render('Tenant/Courses/Show', ['course' => $course]);
+        $teachers = collect();
+        if ($request->user()?->hasAnyRole(['owner', 'admin', 'teacher'])) {
+            $teachersQuery = Teacher::query()->with('user')->orderBy('id');
+            $teacherScopeId = $this->staffTeacherId($request);
+            if ($teacherScopeId !== null) {
+                $teachersQuery->where('id', $teacherScopeId);
+            }
+            $teachers = $teachersQuery->get();
+        }
+
+        return Inertia::render('Tenant/Courses/Show', [
+            'course' => $course,
+            'teachers' => $teachers,
+        ]);
     }
 
     public function edit(Request $request, Course $course): Response
@@ -187,7 +200,7 @@ class CourseController extends Controller
         $course->update($data);
 
         return redirect()
-            ->route('courses.index')
+            ->back()
             ->with('success', 'Course updated successfully.');
     }
 

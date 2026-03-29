@@ -83,18 +83,7 @@ class QuizController extends Controller
         unset($quizData['randomize']);
 
         $quiz = Quiz::query()->create($quizData);
-        foreach ($questions as $i => $q) {
-            Question::query()->create([
-                'quiz_id' => $quiz->id,
-                'type' => $q['type'],
-                'points' => $q['points'] ?? 1,
-                'payload' => $q['payload'],
-                'explanation' => $q['explanation'] ?? null,
-                'sort_order' => $i,
-            ]);
-        }
-
-        $quiz->update(['total_marks' => (int) $quiz->questions()->sum('points')]);
+        $this->replaceQuizQuestions($quiz, $questions);
 
         return redirect()->route('lessons.quizzes.index', $lesson);
     }
@@ -132,7 +121,15 @@ class QuizController extends Controller
             'negative_marking' => ['sometimes', 'boolean'],
             'show_correct_after_finish' => ['sometimes', 'boolean'],
             'status' => ['sometimes', 'string', 'in:draft,published'],
+            'questions' => ['sometimes', 'array', 'min:1'],
+            'questions.*.type' => ['required', 'string'],
+            'questions.*.points' => ['nullable', 'integer'],
+            'questions.*.payload' => ['required', 'array'],
+            'questions.*.explanation' => ['nullable', 'string'],
         ]);
+
+        $questionsPayload = $data['questions'] ?? null;
+        unset($data['questions']);
 
         if ($request->has('is_shuffle_questions')) {
             $data['is_shuffle_questions'] = $request->boolean('is_shuffle_questions');
@@ -155,7 +152,31 @@ class QuizController extends Controller
 
         $quiz->update($data);
 
+        if (is_array($questionsPayload)) {
+            $this->replaceQuizQuestions($quiz, $questionsPayload);
+        }
+
         return redirect()->route('lessons.quizzes.index', $lesson);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $questions
+     */
+    protected function replaceQuizQuestions(Quiz $quiz, array $questions): void
+    {
+        $quiz->questions()->delete();
+        foreach ($questions as $i => $q) {
+            Question::query()->create([
+                'quiz_id' => $quiz->id,
+                'type' => $q['type'],
+                'points' => $q['points'] ?? 1,
+                'payload' => $q['payload'],
+                'explanation' => $q['explanation'] ?? null,
+                'sort_order' => $i,
+            ]);
+        }
+
+        $quiz->update(['total_marks' => (int) $quiz->questions()->sum('points')]);
     }
 
     public function destroy(Request $request, Lesson $lesson, Quiz $quiz): RedirectResponse

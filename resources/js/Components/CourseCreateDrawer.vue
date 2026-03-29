@@ -20,6 +20,12 @@ const form = useForm({
 
 const levels = ['A1', 'A2', 'B1', 'B2', 'C1'];
 
+/** Menus must stack above the drawer (z-index 11000) or clicks/options break. */
+const selectMenuProps = {
+    zIndex: 12050,
+    scrollStrategy: 'close',
+};
+
 const statusItems = [
     { title: 'Draft', value: 'draft' },
     { title: 'Published', value: 'published' },
@@ -28,7 +34,7 @@ const statusItems = [
 const teacherItems = computed(() =>
     props.teachers.map((t) => ({
         title: t.user?.name ?? `Teacher #${t.id}`,
-        value: t.id,
+        value: Number(t.id),
     })),
 );
 
@@ -122,6 +128,7 @@ watch(model, (open) => {
                     :error-messages="form.errors.level"
                     hide-details="auto"
                     :items="levels"
+                    :menu-props="selectMenuProps"
                     label="Level"
                     variant="outlined"
                 />
@@ -135,6 +142,7 @@ watch(model, (open) => {
                     :items="teacherItems"
                     item-title="title"
                     item-value="value"
+                    :menu-props="selectMenuProps"
                     label="Teacher"
                     variant="outlined"
                 />
@@ -158,6 +166,7 @@ watch(model, (open) => {
                     :items="statusItems"
                     item-title="title"
                     item-value="value"
+                    :menu-props="selectMenuProps"
                     label="Status"
                     variant="outlined"
                 />

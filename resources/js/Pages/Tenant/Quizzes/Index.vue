@@ -343,31 +343,6 @@ function confirmArchiveSelection() {
     );
 }
 
-function duplicateQuiz(item) {
-    router.post(
-        `/quizzes/${item.id}/duplicate`,
-        {},
-        {
-            preserveScroll: true,
-        },
-    );
-}
-
-function togglePublish(item) {
-    const next = item.status === 'published' ? 'draft' : 'published';
-    router.patch(`/quizzes/${item.id}`, {
-        status: next,
-    });
-}
-
-function archiveOne(item) {
-    router.post(
-        '/quizzes/bulk-archive',
-        { ids: [item.id] },
-        { preserveScroll: true },
-    );
-}
-
 function onToolbarCreate() {
     if (!isStaff.value) {
         return;
@@ -402,10 +377,7 @@ const headers = computed(() => {
         { title: 'Created', key: 'created_display', sortable: true },
     ];
     if (isStaff.value) {
-        base.push(
-            { title: '', key: 'actions', sortable: false, align: 'end', width: '240px' },
-            { title: '', key: 'select', sortable: false, align: 'center', width: '84px' },
-        );
+        base.push({ title: '', key: 'select', sortable: false, align: 'center', width: '84px' });
     } else {
         base.push({ title: '', key: 'take_only', sortable: false, align: 'end', width: '100px' });
     }
@@ -549,7 +521,12 @@ const headers = computed(() => {
                 :no-data-text="tableNoDataText"
             >
                 <template #item.title="{ item }">
-                    <span class="font-weight-medium text-primary">{{ item.title }}</span>
+                    <Link
+                        class="text-decoration-none font-weight-medium text-primary"
+                        :href="quizViewHref(item) ?? `/quizzes/${item.id}/take`"
+                    >
+                        {{ item.title }}
+                    </Link>
                 </template>
 
                 <template #item.course_title="{ item }">
@@ -581,42 +558,6 @@ const headers = computed(() => {
                     >
                         {{ item.status === 'published' ? 'Published' : 'Draft' }}
                     </v-chip>
-                </template>
-
-                <template #item.actions="{ item }">
-                    <div class="d-flex flex-wrap justify-end ga-1">
-                        <Link
-                            v-if="quizViewHref(item)"
-                            class="text-decoration-none"
-                            :href="quizViewHref(item)"
-                        >
-                            <v-btn color="primary" density="compact" size="small" variant="text"> View </v-btn>
-                        </Link>
-                        <v-btn
-                            color="primary"
-                            density="compact"
-                            size="small"
-                            variant="text"
-                            @click="
-                                editingQuizId = item.id;
-                                editDrawerOpen = true;
-                            "
-                        >
-                            Edit
-                        </v-btn>
-                        <Link class="text-decoration-none" :href="`/quizzes/${item.id}/take`">
-                            <v-btn color="primary" density="compact" size="small" variant="text"> Take </v-btn>
-                        </Link>
-                        <v-btn color="primary" density="compact" size="small" variant="text" @click="duplicateQuiz(item)">
-                            Duplicate
-                        </v-btn>
-                        <v-btn color="primary" density="compact" size="small" variant="text" @click="togglePublish(item)">
-                            {{ item.status === 'published' ? 'Unpublish' : 'Publish' }}
-                        </v-btn>
-                        <v-btn color="warning" density="compact" size="small" variant="text" @click="archiveOne(item)">
-                            Archive
-                        </v-btn>
-                    </div>
                 </template>
 
                 <template #item.take_only="{ item }">

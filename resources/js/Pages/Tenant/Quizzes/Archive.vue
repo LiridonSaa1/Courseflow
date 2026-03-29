@@ -76,6 +76,19 @@ function toggleRow(id, checked) {
     selectedIds.value = [...set];
 }
 
+function formatCreated(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
+    } catch {
+        return '—';
+    }
+}
+
 function formatDeleted(iso) {
     if (!iso) return '—';
     try {
@@ -91,11 +104,29 @@ function formatDeleted(iso) {
     }
 }
 
+function formatQuizType(t) {
+    if (!t) return '—';
+    const s = String(t).replace(/_/g, ' ');
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function quizViewHref(item) {
+    if (item.lesson_id && item.lesson?.id) {
+        return `/lessons/${item.lesson.id}/quizzes/${item.id}/edit`;
+    }
+    return null;
+}
+
 const items = computed(() =>
     props.quizzes.map((q) => ({
         ...q,
         course_title: q.lesson?.module?.course?.title ?? q.course?.title ?? '—',
+        created_display: formatCreated(q.created_at),
         deleted_display: formatDeleted(q.deleted_at),
+        type_display: formatQuizType(q.type),
+        questions_count_display: q.questions_count ?? 0,
+        attempts_count_display: q.attempts_count ?? 0,
+        avg_display: q.avg_score_percent != null ? `${q.avg_score_percent}%` : '—',
     })),
 );
 
@@ -118,18 +149,28 @@ const someSelected = computed(() => {
 });
 
 function toggleSelectAll(checked) {
+    const next = new Set(selectedIds.value);
+    const visibleIds = items.value.map((i) => i.id);
+
     if (checked) {
-        selectedIds.value = items.value.map((i) => i.id);
+        visibleIds.forEach((id) => next.add(id));
     } else {
-        selectedIds.value = [];
+        visibleIds.forEach((id) => next.delete(id));
     }
+
+    selectedIds.value = [...next];
 }
 
 const headers = [
+    { title: 'ID', key: 'id', sortable: true, width: '72px' },
     { title: 'Title', key: 'title', sortable: true },
     { title: 'Course', key: 'course_title', sortable: true },
-    { title: 'Type', key: 'type', sortable: true },
+    { title: 'Type', key: 'type_display', sortable: true },
+    { title: 'Questions', key: 'questions_count_display', sortable: true },
+    { title: 'Attempts', key: 'attempts_count_display', sortable: true },
+    { title: 'Avg score', key: 'avg_display', sortable: true },
     { title: 'Status', key: 'status', sortable: true },
+    { title: 'Created', key: 'created_display', sortable: true },
     { title: 'Removed', key: 'deleted_display', sortable: true },
     { title: '', key: 'select', sortable: false, align: 'center', width: '84px' },
 ];
@@ -255,7 +296,7 @@ watch(
 
         <v-snackbar
             v-model="warningSnackbar"
-            class="archive-snackbar archive-snackbar--warning"
+            class="flash-snackbar flash-snackbar--warning"
             color="warning"
             elevation="8"
             location="top end"
@@ -314,53 +355,138 @@ watch(
             </v-card>
         </v-dialog>
 
-        <div class="d-flex flex-wrap align-center justify-space-between ga-4 mb-4">
-            <div>
-                <h1 class="text-h5 font-weight-bold">Quiz archive</h1>
-                <p class="text-body-2 text-medium-emphasis mb-0">Trashed quizzes. Restore or delete permanently.</p>
-            </div>
-            <Link class="text-decoration-none" href="/quizzes">
-                <v-btn color="primary" prepend-icon="mdi-arrow-left" variant="tonal"> Back to quizzes </v-btn>
-            </Link>
-        </div>
-
         <v-card class="overflow-hidden" rounded="lg">
-            <v-toolbar color="surface" density="comfortable" flat>
+            <v-toolbar class="table-toolbar px-2 px-sm-4" color="primary" density="comfortable" flat>
+                <Link class="d-flex align-center ga-2 flex-shrink-0 text-decoration-none text-white" href="/quizzes">
+                    <v-btn color="white" icon="mdi-arrow-left" variant="text" />
+                    <span class="text-body-1 font-weight-medium">Quiz archive</span>
+                </Link>
                 <v-spacer />
-                <v-btn
-                    color="primary"
-                    :disabled="selectedIds.length === 0"
-                    prepend-icon="mdi-backup-restore"
-                    variant="tonal"
-                    @click="openRestoreDialog"
-                >
-                    Restore
-                </v-btn>
-                <v-btn
-                    class="ms-2"
-                    color="error"
-                    :disabled="selectedIds.length === 0"
-                    prepend-icon="mdi-delete-forever"
-                    variant="tonal"
-                    @click="openForceDeleteDialog"
-                >
-                    Delete forever
-                </v-btn>
+
+                <v-tooltip location="top" text="Restore selected">
+                    <template #activator="{ props: tip }">
+                        <span v-bind="tip" class="d-inline-flex align-center table-toolbar-icon-wrap">
+                            <v-badge
+                                class="table-toolbar-action-badge"
+                                color="warning"
+                                dot
+                                location="top end"
+                                :model-value="selectedIds.length > 0"
+                                offset-x="6"
+                                offset-y="6"
+                            >
+                                <v-btn
+                                    color="white"
+                                    :disabled="selectedIds.length === 0"
+                                    icon="mdi-backup-restore"
+                                    variant="text"
+                                    @click="openRestoreDialog"
+                                />
+                            </v-badge>
+                        </span>
+                    </template>
+                </v-tooltip>
+
+                <v-tooltip location="top" text="Delete forever">
+                    <template #activator="{ props: tip }">
+                        <span v-bind="tip" class="d-inline-flex align-center table-toolbar-icon-wrap">
+                            <v-badge
+                                class="table-toolbar-action-badge"
+                                color="warning"
+                                dot
+                                location="top end"
+                                :model-value="selectedIds.length > 0"
+                                offset-x="6"
+                                offset-y="6"
+                            >
+                                <v-btn
+                                    color="white"
+                                    :disabled="selectedIds.length === 0"
+                                    icon="mdi-delete-forever"
+                                    variant="text"
+                                    @click="openForceDeleteDialog"
+                                />
+                            </v-badge>
+                        </span>
+                    </template>
+                </v-tooltip>
+
+                <v-divider
+                    class="table-toolbar-divider mx-1 align-self-center"
+                    inset
+                    length="24"
+                    thickness="2"
+                    vertical
+                />
+
+                <Link class="d-inline-flex text-decoration-none" href="/quizzes">
+                    <v-btn class="ms-1" color="white" prepend-icon="mdi-view-list" variant="text"> All quizzes </v-btn>
+                </Link>
             </v-toolbar>
+
             <v-divider />
 
             <v-data-table
                 :headers="headers"
                 :items="items"
-                class="quizzes-archive-table"
+                class="quizzes-table"
                 hover
                 item-value="id"
                 :items-per-page="15"
                 no-data-text="No archived quizzes."
             >
+                <template #item.title="{ item }">
+                    <Link
+                        class="text-decoration-none font-weight-medium text-primary"
+                        :href="quizViewHref(item) ?? `/quizzes/${item.id}/take`"
+                    >
+                        {{ item.title }}
+                    </Link>
+                </template>
+
+                <template #item.course_title="{ item }">
+                    <span class="text-medium-emphasis">{{ item.course_title }}</span>
+                </template>
+
+                <template #item.type_display="{ item }">
+                    <span class="text-medium-emphasis">{{ item.type_display }}</span>
+                </template>
+
+                <template #item.questions_count_display="{ item }">
+                    <span class="text-medium-emphasis">{{ item.questions_count_display }}</span>
+                </template>
+
+                <template #item.attempts_count_display="{ item }">
+                    <span class="text-medium-emphasis">{{ item.attempts_count_display }}</span>
+                </template>
+
+                <template #item.avg_display="{ item }">
+                    <span class="text-medium-emphasis">{{ item.avg_display }}</span>
+                </template>
+
+                <template #item.status="{ item }">
+                    <v-chip
+                        :color="item.status === 'published' ? 'success' : 'default'"
+                        density="comfortable"
+                        size="small"
+                        variant="tonal"
+                    >
+                        {{ item.status === 'published' ? 'Published' : 'Draft' }}
+                    </v-chip>
+                </template>
+
+                <template #item.created_display="{ item }">
+                    <span class="text-medium-emphasis">{{ item.created_display }}</span>
+                </template>
+
+                <template #item.deleted_display="{ item }">
+                    <span class="text-medium-emphasis text-body-2">{{ item.deleted_display }}</span>
+                </template>
+
                 <template #header.select>
                     <div class="d-flex justify-center">
                         <v-checkbox-btn
+                            class="quizzes-table-checkbox"
                             :indeterminate="someSelected"
                             :model-value="allSelected"
                             @update:model-value="toggleSelectAll"
@@ -371,6 +497,7 @@ watch(
                 <template #item.select="{ item }">
                     <div class="d-flex justify-center">
                         <v-checkbox-btn
+                            class="quizzes-table-checkbox"
                             :model-value="selectedIds.includes(item.id)"
                             @update:model-value="(v) => toggleRow(item.id, v)"
                         />
@@ -394,5 +521,88 @@ watch(
 
 .flash-snackbar__inner {
     width: 100%;
+}
+
+.table-toolbar {
+    align-items: center;
+}
+
+.table-toolbar :deep(.v-toolbar__content) {
+    align-items: center;
+}
+
+.table-toolbar-icon-wrap {
+    line-height: 0;
+}
+
+.table-toolbar-action-badge :deep(.v-badge__badge) {
+    min-width: 10px;
+    min-height: 10px;
+    height: 10px;
+    width: 10px;
+    border: 2px solid rgb(var(--v-theme-primary));
+    box-sizing: content-box;
+}
+
+.table-toolbar-divider {
+    opacity: 0.45;
+    border-color: rgb(255 255 255 / 0.5);
+}
+
+.quizzes-table :deep(.v-data-table__th) {
+    font-weight: 600;
+}
+
+.quizzes-table :deep(.v-data-table-footer) {
+    justify-content: flex-start;
+}
+
+.quizzes-table :deep(.v-data-table-footer__info) {
+    margin-inline-start: auto;
+}
+
+.quizzes-table-checkbox {
+    --quizzes-cb-size: 36px;
+}
+
+.quizzes-table-checkbox :deep(.v-selection-control) {
+    min-height: var(--quizzes-cb-size);
+}
+
+.quizzes-table-checkbox :deep(.v-btn) {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.quizzes-table-checkbox :deep(.v-selection-control__wrapper) {
+    width: var(--quizzes-cb-size);
+    height: var(--quizzes-cb-size);
+}
+
+.quizzes-table-checkbox :deep(.v-selection-control__input) {
+    width: var(--quizzes-cb-size);
+    height: var(--quizzes-cb-size);
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.quizzes-table-checkbox :deep(.v-checkbox-btn__overlay) {
+    border-radius: 8px;
+    border: 2px solid rgb(var(--v-theme-primary));
+    background-color: #fff !important;
+    box-shadow: none !important;
+}
+
+.quizzes-table-checkbox :deep(.v-icon) {
+    color: rgb(var(--v-theme-primary)) !important;
+    opacity: 1 !important;
+}
+
+.quizzes-table-checkbox :deep(.v-selection-control--dirty .v-checkbox-btn__overlay),
+.quizzes-table-checkbox :deep(.v-selection-control--indeterminate .v-checkbox-btn__overlay) {
+    background-color: #fff !important;
+    border-color: rgb(var(--v-theme-primary));
 }
 </style>

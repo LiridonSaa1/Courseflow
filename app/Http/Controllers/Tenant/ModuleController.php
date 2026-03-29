@@ -38,10 +38,21 @@ class ModuleController extends Controller
         $this->staff($request);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer'],
+            'status' => ['nullable', 'string', 'in:draft,published'],
         ]);
         $data['course_id'] = $course->id;
-        $data['sort_order'] = $data['sort_order'] ?? ($course->modules()->max('sort_order') + 1);
+        $data['sort_order'] = $data['sort_order'] ?? (($course->modules()->max('sort_order') ?? 0) + 1);
+        $data['status'] = $data['status'] ?? 'published';
+        $data['created_by'] = $request->user()->id;
+        $data['updated_by'] = $request->user()->id;
+        if ($data['status'] === 'published') {
+            $data['published_at'] = now();
+        } else {
+            $data['published_at'] = null;
+        }
+
         Module::query()->create($data);
 
         return redirect()->route('courses.show', $course);
@@ -63,8 +74,22 @@ class ModuleController extends Controller
         $this->authorizeStaffCourse($request, $course);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
             'sort_order' => ['nullable', 'integer'],
+            'status' => ['sometimes', 'string', 'in:draft,published'],
         ]);
+
+        if (array_key_exists('status', $data)) {
+            if ($data['status'] === 'published' && $module->published_at === null) {
+                $data['published_at'] = now();
+            }
+            if ($data['status'] === 'draft') {
+                $data['published_at'] = null;
+            }
+        }
+
+        $data['updated_by'] = $request->user()->id;
+
         $module->update($data);
 
         return redirect()->route('courses.show', $course);

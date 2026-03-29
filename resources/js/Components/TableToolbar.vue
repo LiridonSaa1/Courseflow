@@ -16,6 +16,10 @@ defineProps({
     deleteTooltip: { type: String, default: 'Move to archive (trash)' },
     archiveTooltip: { type: String, default: 'Open archive (trash)' },
     filterTooltip: { type: String, default: 'Filter courses' },
+    /** When false, hide archive (e.g. course show has no module archive). */
+    showArchive: { type: Boolean, default: true },
+    /** When false, hide filter button. */
+    showFilter: { type: Boolean, default: true },
 });
 
 const emitEvents = defineEmits(['create', 'edit', 'delete', 'filter']);
@@ -98,8 +102,15 @@ function onFilterClick() {
                 </template>
             </v-tooltip>
 
-            <v-divider class="table-toolbar-divider mx-1 align-self-center" inset length="24" thickness="2" vertical />
-            <v-tooltip location="top" :text="archiveTooltip">
+            <v-divider
+                v-if="showArchive || showFilter"
+                class="table-toolbar-divider mx-1 align-self-center"
+                inset
+                length="24"
+                thickness="2"
+                vertical
+            />
+            <v-tooltip v-if="showArchive" location="top" :text="archiveTooltip">
                 <template #activator="{ props: tooltipProps }">
                     <Link class="d-inline-flex text-decoration-none" :href="archiveHref">
                         <span v-bind="tooltipProps" class="d-inline-flex align-center table-toolbar-icon-wrap">
@@ -119,7 +130,7 @@ function onFilterClick() {
                 </template>
             </v-tooltip>
 
-            <v-tooltip location="top" :text="filterTooltip">
+            <v-tooltip v-if="showFilter" location="top" :text="filterTooltip">
                 <template #activator="{ props: tooltipProps }">
                     <span v-bind="tooltipProps" class="d-inline-flex align-center">
                         <v-btn color="white" icon="mdi-magnify" variant="text" @click="onFilterClick" />

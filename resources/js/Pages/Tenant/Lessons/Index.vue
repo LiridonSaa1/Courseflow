@@ -355,38 +355,6 @@ function confirmArchiveSelection() {
     );
 }
 
-function duplicateLesson(item) {
-    router.post(
-        `/lessons/${item.id}/duplicate`,
-        {},
-        {
-            preserveScroll: true,
-        },
-    );
-}
-
-function togglePublish(item) {
-    const next = item.status === 'published' ? 'draft' : 'published';
-    router.patch(`/lessons/${item.id}`, {
-        title: item.title,
-        module_id: item.module_id,
-        short_description: item.short_description,
-        type: item.type,
-        level: item.level,
-        duration_minutes: item.duration_minutes,
-        sort_order: item.sort_order,
-        status: next,
-    });
-}
-
-function archiveOne(item) {
-    router.post(
-        '/lessons/bulk-archive',
-        { ids: [item.id] },
-        { preserveScroll: true },
-    );
-}
-
 function onToolbarCreate() {
     if (!isStaff.value) {
         return;
@@ -421,10 +389,7 @@ const headers = computed(() => {
         { title: 'Created', key: 'created_display', sortable: true },
     ];
     if (isStaff.value) {
-        base.push(
-            { title: '', key: 'actions', sortable: false, align: 'end', width: '200px' },
-            { title: '', key: 'select', sortable: false, align: 'center', width: '84px' },
-        );
+        base.push({ title: '', key: 'select', sortable: false, align: 'center', width: '84px' });
     }
     return base;
 });
@@ -603,44 +568,6 @@ const headers = computed(() => {
                     >
                         {{ item.status === 'published' ? 'Published' : 'Draft' }}
                     </v-chip>
-                </template>
-
-                <template #item.actions="{ item }">
-                    <div class="d-flex flex-wrap justify-end ga-1">
-                        <v-btn
-                            color="primary"
-                            density="compact"
-                            size="small"
-                            variant="text"
-                            @click="
-                                editingLessonId = item.id;
-                                editDrawerOpen = true;
-                            "
-                        >
-                            Edit
-                        </v-btn>
-                        <v-btn
-                            color="primary"
-                            density="compact"
-                            size="small"
-                            variant="text"
-                            @click="duplicateLesson(item)"
-                        >
-                            Duplicate
-                        </v-btn>
-                        <v-btn
-                            color="primary"
-                            density="compact"
-                            size="small"
-                            variant="text"
-                            @click="togglePublish(item)"
-                        >
-                            {{ item.status === 'published' ? 'Unpublish' : 'Publish' }}
-                        </v-btn>
-                        <v-btn color="warning" density="compact" size="small" variant="text" @click="archiveOne(item)">
-                            Archive
-                        </v-btn>
-                    </div>
                 </template>
 
                 <template #header.select>
