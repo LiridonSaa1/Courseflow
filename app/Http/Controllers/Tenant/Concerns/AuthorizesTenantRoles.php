@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant\Concerns;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\Module;
+use App\Models\Quiz;
 use App\Models\Student;
 use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,7 +51,10 @@ trait AuthorizesTenantRoles
         if ($tid === null) {
             return;
         }
-        abort_unless($course->teacher_id !== null && (int) $course->teacher_id === $tid, 403);
+        $uid = (int) $request->user()->id;
+        $isCreator = (int) ($course->created_by ?? 0) === $uid;
+        $isAssignedTeacher = (int) ($course->teacher_id ?? 0) === $tid;
+        abort_unless($isCreator || $isAssignedTeacher, 403);
     }
 
     protected function authorizeStaffModule(Request $request, Module $module): void
@@ -59,10 +63,66 @@ trait AuthorizesTenantRoles
         $this->authorizeStaffCourse($request, $module->course);
     }
 
+    /**
+     * Teachers may only manage lessons they created (created_by).
+     */
     protected function authorizeStaffLesson(Request $request, Lesson $lesson): void
     {
-        $lesson->loadMissing('module.course');
-        $this->authorizeStaffCourse($request, $lesson->module->course);
+        $tid = $this->staffTeacherId($request);
+        if ($tid === null) {
+            return;
+        }
+        abort_unless((int) $lesson->created_by === (int) $request->user()->id, 403);
+    }
+
+    /**
+     * Teachers may manage quizzes tied to their lessons, or course-level quizzes for courses they own/teach.
+     */
+    protected function authorizeStaffQuiz(Request $request, Quiz $quiz): void
+    {
+        $tid = $this->staffTeacherId($request);
+        if ($tid === null) {
+            return;
+        }
+        $quiz->loadMissing(['lesson', 'course']);
+        if ($quiz->lesson_id !== null && $quiz->lesson !== null) {
+            $this->authorizeStaffLesson($request, $quiz->lesson);
+
+            return;
+        }
+        if ($quiz->course_id !== null && $quiz->course !== null) {
+            $this->authorizeStaffCourse($request, $quiz->course);
+
+            return;
+        }
+        abort(403);
+    }
+
+    /**
+     * @param  Builder<Quiz>  $query
+     * @return Builder<Quiz>
+     */
+    protected function scopeQuizzesForStaff(Request $request, Builder $query): Builder
+    {
+        $tid = $this->staffTeacherId($request);
+        if ($tid !== null) {
+            $uid = (int) $request->user()->id;
+            $query->where(function (Builder $q) use ($uid, $tid) {
+                $q->whereHas('lesson', fn (Builder $lq) => $lq->where('created_by', $uid))
+                    ->orWhere(function (Builder $q2) use ($uid, $tid) {
+                        $q2->whereNull('lesson_id')
+                            ->whereNotNull('course_id')
+                            ->whereHas('course', function (Builder $cq) use ($uid, $tid) {
+                                $cq->where(function (Builder $c2) use ($uid, $tid) {
+                                    $c2->where('created_by', $uid)
+                                        ->orWhere('teacher_id', $tid);
+                                });
+                            });
+                    });
+            });
+        }
+
+        return $query;
     }
 
     /**
@@ -73,7 +133,25 @@ trait AuthorizesTenantRoles
     {
         $tid = $this->staffTeacherId($request);
         if ($tid !== null) {
-            $query->where('teacher_id', $tid);
+            $uid = $request->user()->id;
+            $query->where(function (Builder $q) use ($uid, $tid) {
+                $q->where('created_by', $uid)
+                    ->orWhere('teacher_id', $tid);
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  Builder<Lesson>  $query
+     * @return Builder<Lesson>
+     */
+    protected function scopeLessonsForStaff(Request $request, Builder $query): Builder
+    {
+        $tid = $this->staffTeacherId($request);
+        if ($tid !== null) {
+            $query->where('created_by', $request->user()->id);
         }
 
         return $query;

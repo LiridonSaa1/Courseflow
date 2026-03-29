@@ -1,0 +1,398 @@
+<script setup>
+import TenantLayout from '@/Layouts/TenantLayout.vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue';
+
+const page = usePage();
+
+const SNACKBAR_MS = 4000;
+
+const props = defineProps({
+    quizzes: { type: Array, default: () => [] },
+});
+
+const flashSnackbar = ref(false);
+const flashMessage = ref('');
+const snackbarProgress = ref(100);
+
+let snackbarProgressRaf = null;
+
+function clearSnackbarProgressAnimation() {
+    if (snackbarProgressRaf !== null) {
+        cancelAnimationFrame(snackbarProgressRaf);
+        snackbarProgressRaf = null;
+    }
+}
+
+watch(flashSnackbar, (open) => {
+    clearSnackbarProgressAnimation();
+    if (!open) {
+        return;
+    }
+    snackbarProgress.value = 100;
+    const start = performance.now();
+    function tick(now) {
+        const elapsed = now - start;
+        snackbarProgress.value = Math.max(0, 100 - (elapsed / SNACKBAR_MS) * 100);
+        if (elapsed < SNACKBAR_MS && flashSnackbar.value) {
+            snackbarProgressRaf = requestAnimationFrame(tick);
+        }
+    }
+    snackbarProgressRaf = requestAnimationFrame(tick);
+});
+
+function showFlashSuccess() {
+    const msg = page.props.flash?.success;
+    if (typeof msg === 'string' && msg.length > 0) {
+        flashMessage.value = msg;
+        flashSnackbar.value = true;
+    }
+}
+
+watch(
+    () => page.props.flash?.success,
+    () => showFlashSuccess(),
+    { immediate: true },
+);
+
+const removeInertiaSuccessListener = router.on('success', () => {
+    nextTick(() => showFlashSuccess());
+});
+
+onUnmounted(() => {
+    removeInertiaSuccessListener();
+    clearSnackbarProgressAnimation();
+});
+
+const selectedIds = ref([]);
+
+function toggleRow(id, checked) {
+    const set = new Set(selectedIds.value);
+    if (checked) {
+        set.add(id);
+    } else {
+        set.delete(id);
+    }
+    selectedIds.value = [...set];
+}
+
+function formatDeleted(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return '—';
+    }
+}
+
+const items = computed(() =>
+    props.quizzes.map((q) => ({
+        ...q,
+        course_title: q.lesson?.module?.course?.title ?? q.course?.title ?? '—',
+        deleted_display: formatDeleted(q.deleted_at),
+    })),
+);
+
+const allSelected = computed(() => {
+    if (!items.value.length) {
+        return false;
+    }
+
+    return items.value.every((i) => selectedIds.value.includes(i.id));
+});
+
+const someSelected = computed(() => {
+    if (!items.value.length) {
+        return false;
+    }
+
+    const any = items.value.some((i) => selectedIds.value.includes(i.id));
+
+    return any && !allSelected.value;
+});
+
+function toggleSelectAll(checked) {
+    if (checked) {
+        selectedIds.value = items.value.map((i) => i.id);
+    } else {
+        selectedIds.value = [];
+    }
+}
+
+const headers = [
+    { title: 'Title', key: 'title', sortable: true },
+    { title: 'Course', key: 'course_title', sortable: true },
+    { title: 'Type', key: 'type', sortable: true },
+    { title: 'Status', key: 'status', sortable: true },
+    { title: 'Removed', key: 'deleted_display', sortable: true },
+    { title: '', key: 'select', sortable: false, align: 'center', width: '84px' },
+];
+
+const warningSnackbar = ref(false);
+const warningMessage = ref('');
+
+function showWarning(text) {
+    warningMessage.value = text;
+    warningSnackbar.value = true;
+}
+
+const restoreConfirmOpen = ref(false);
+const forceDeleteConfirmOpen = ref(false);
+
+function openRestoreDialog() {
+    if (selectedIds.value.length === 0) {
+        showWarning('Zgjidh të paktën një kuiz me checkbox për ta rikthyer.');
+        return;
+    }
+    restoreConfirmOpen.value = true;
+}
+
+function cancelRestoreConfirm() {
+    restoreConfirmOpen.value = false;
+}
+
+function confirmRestore() {
+    const ids = [...selectedIds.value];
+    if (ids.length === 0) {
+        restoreConfirmOpen.value = false;
+        return;
+    }
+
+    router.post(
+        '/quizzes/bulk-restore',
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+                restoreConfirmOpen.value = false;
+            },
+            onError: () => {
+                restoreConfirmOpen.value = false;
+            },
+        },
+    );
+}
+
+function openForceDeleteDialog() {
+    if (selectedIds.value.length === 0) {
+        showWarning('Zgjidh të paktën një kuiz me checkbox për ta fshirë përgjithmonë.');
+        return;
+    }
+    forceDeleteConfirmOpen.value = true;
+}
+
+function cancelForceDeleteConfirm() {
+    forceDeleteConfirmOpen.value = false;
+}
+
+function confirmForceDelete() {
+    const ids = [...selectedIds.value];
+    if (ids.length === 0) {
+        forceDeleteConfirmOpen.value = false;
+        return;
+    }
+
+    router.post(
+        '/quizzes/bulk-force-delete',
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                selectedIds.value = [];
+                forceDeleteConfirmOpen.value = false;
+            },
+            onError: () => {
+                forceDeleteConfirmOpen.value = false;
+            },
+        },
+    );
+}
+
+watch(
+    () => props.quizzes,
+    (list) => {
+        const valid = new Set(list.map((q) => q.id));
+        selectedIds.value = selectedIds.value.filter((id) => valid.has(id));
+    },
+);
+</script>
+
+<template>
+    <TenantLayout>
+        <Head title="Quiz archive" />
+
+        <v-snackbar
+            v-model="flashSnackbar"
+            class="flash-snackbar"
+            color="success"
+            elevation="8"
+            location="top end"
+            :timeout="SNACKBAR_MS"
+            rounded="lg"
+        >
+            <div class="flash-snackbar__inner d-flex flex-column">
+                <div class="d-flex align-center ga-3">
+                    <v-icon color="white" icon="mdi-check-circle" size="28" />
+                    <span class="text-body-1">{{ flashMessage }}</span>
+                </div>
+                <v-progress-linear
+                    class="flash-snackbar__progress mt-3"
+                    bg-opacity="0.25"
+                    color="white"
+                    height="3"
+                    rounded
+                    :model-value="snackbarProgress"
+                />
+            </div>
+        </v-snackbar>
+
+        <v-snackbar
+            v-model="warningSnackbar"
+            class="archive-snackbar archive-snackbar--warning"
+            color="warning"
+            elevation="8"
+            location="top end"
+            :timeout="SNACKBAR_MS"
+            rounded="lg"
+        >
+            <div class="d-flex align-center ga-3">
+                <v-icon color="white" icon="mdi-alert-circle-outline" size="28" />
+                <span class="text-body-1 text-white">{{ warningMessage }}</span>
+            </div>
+        </v-snackbar>
+
+        <v-dialog v-model="restoreConfirmOpen" max-width="440" persistent>
+            <v-card rounded="lg">
+                <v-card-title class="d-flex align-center ga-2 text-h6">
+                    <v-icon color="primary" icon="mdi-backup-restore" size="28" />
+                    Rikthe kuizet?
+                </v-card-title>
+                <v-card-text class="text-body-1 text-medium-emphasis">
+                    <template v-if="selectedIds.length === 1"> Ky kuiz do të rikthehet te lista aktive. </template>
+                    <template v-else>
+                        {{ selectedIds.length }} kuize do të rikthehen te lista aktive.
+                    </template>
+                </v-card-text>
+                <v-card-actions class="px-4 pb-4">
+                    <v-spacer />
+                    <v-btn variant="text" @click="cancelRestoreConfirm"> Anulo </v-btn>
+                    <v-btn color="primary" prepend-icon="mdi-backup-restore" variant="flat" @click="confirmRestore">
+                        Rikthe
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
+        <v-dialog v-model="forceDeleteConfirmOpen" max-width="440" persistent>
+            <v-card rounded="lg">
+                <v-card-title class="d-flex align-center ga-2 text-h6">
+                    <v-icon color="error" icon="mdi-delete-forever" size="28" />
+                    Fshirje e përhershme?
+                </v-card-title>
+                <v-card-text class="text-body-1 text-medium-emphasis">
+                    <template v-if="selectedIds.length === 1">
+                        Ky kuiz do të fshihet përgjithmonë. Ky veprim nuk mund të zhbëhet.
+                    </template>
+                    <template v-else>
+                        {{ selectedIds.length }} kuize do të fshihen përgjithmonë. Ky veprim nuk mund të zhbëhet.
+                    </template>
+                </v-card-text>
+                <v-card-actions class="px-4 pb-4">
+                    <v-spacer />
+                    <v-btn variant="text" @click="cancelForceDeleteConfirm"> Anulo </v-btn>
+                    <v-btn color="error" prepend-icon="mdi-delete-forever" variant="flat" @click="confirmForceDelete">
+                        Fshi përgjithmonë
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
+        <div class="d-flex flex-wrap align-center justify-space-between ga-4 mb-4">
+            <div>
+                <h1 class="text-h5 font-weight-bold">Quiz archive</h1>
+                <p class="text-body-2 text-medium-emphasis mb-0">Trashed quizzes. Restore or delete permanently.</p>
+            </div>
+            <Link class="text-decoration-none" href="/quizzes">
+                <v-btn color="primary" prepend-icon="mdi-arrow-left" variant="tonal"> Back to quizzes </v-btn>
+            </Link>
+        </div>
+
+        <v-card class="overflow-hidden" rounded="lg">
+            <v-toolbar color="surface" density="comfortable" flat>
+                <v-spacer />
+                <v-btn
+                    color="primary"
+                    :disabled="selectedIds.length === 0"
+                    prepend-icon="mdi-backup-restore"
+                    variant="tonal"
+                    @click="openRestoreDialog"
+                >
+                    Restore
+                </v-btn>
+                <v-btn
+                    class="ms-2"
+                    color="error"
+                    :disabled="selectedIds.length === 0"
+                    prepend-icon="mdi-delete-forever"
+                    variant="tonal"
+                    @click="openForceDeleteDialog"
+                >
+                    Delete forever
+                </v-btn>
+            </v-toolbar>
+            <v-divider />
+
+            <v-data-table
+                :headers="headers"
+                :items="items"
+                class="quizzes-archive-table"
+                hover
+                item-value="id"
+                :items-per-page="15"
+                no-data-text="No archived quizzes."
+            >
+                <template #header.select>
+                    <div class="d-flex justify-center">
+                        <v-checkbox-btn
+                            :indeterminate="someSelected"
+                            :model-value="allSelected"
+                            @update:model-value="toggleSelectAll"
+                        />
+                    </div>
+                </template>
+
+                <template #item.select="{ item }">
+                    <div class="d-flex justify-center">
+                        <v-checkbox-btn
+                            :model-value="selectedIds.includes(item.id)"
+                            @update:model-value="(v) => toggleRow(item.id, v)"
+                        />
+                    </div>
+                </template>
+            </v-data-table>
+        </v-card>
+    </TenantLayout>
+</template>
+
+<style scoped>
+.flash-snackbar {
+    margin-top: 12px !important;
+    margin-inline-end: 12px !important;
+}
+
+.flash-snackbar :deep(.v-snackbar__wrapper) {
+    min-width: 280px;
+    max-width: min(420px, 92vw);
+}
+
+.flash-snackbar__inner {
+    width: 100%;
+}
+</style>

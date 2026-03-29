@@ -21,28 +21,32 @@ class LessonHubController extends Controller
 
     public function index(Request $request): Response
     {
-        $lessons = Lesson::query()
+        $lessons = $this->scopeLessonsForStaff($request, Lesson::query())
             ->with(['module.course'])
             ->orderBy('module_id')
             ->orderBy('sort_order')
             ->get();
 
-        $courses = Course::query()
+        $courses = $this->scopeCoursesForStaff($request, Course::query())
             ->with(['modules' => fn ($q) => $q->orderBy('sort_order')])
             ->orderBy('title')
             ->get();
 
+        $courseIds = $courses->pluck('id')->all();
         $modules = Module::query()
+            ->whereIn('course_id', $courseIds)
             ->with('course')
             ->orderBy('course_id')
             ->orderBy('sort_order')
             ->get();
 
+        $archivedLessonsCount = $this->scopeLessonsForStaff($request, Lesson::onlyTrashed())->count();
+
         return Inertia::render('Tenant/Lessons/Index', [
             'lessons' => $lessons,
             'courses' => $courses,
             'modules' => $modules,
-            'archivedLessonsCount' => Lesson::onlyTrashed()->count(),
+            'archivedLessonsCount' => $archivedLessonsCount,
         ]);
     }
 
@@ -50,7 +54,7 @@ class LessonHubController extends Controller
     {
         $this->staff($request);
 
-        $lessons = Lesson::onlyTrashed()
+        $lessons = $this->scopeLessonsForStaff($request, Lesson::onlyTrashed())
             ->with(['module.course'])
             ->latest('deleted_at')
             ->get();
@@ -68,7 +72,7 @@ class LessonHubController extends Controller
             'ids.*' => ['integer', 'exists:lessons,id'],
         ])['ids'];
 
-        Lesson::query()->whereIn('id', $ids)->delete();
+        $this->scopeLessonsForStaff($request, Lesson::query())->whereIn('id', $ids)->delete();
 
         return redirect()
             ->route('lessons.index')
@@ -86,7 +90,7 @@ class LessonHubController extends Controller
             ],
         ])['ids'];
 
-        Lesson::onlyTrashed()->whereIn('id', $ids)->restore();
+        $this->scopeLessonsForStaff($request, Lesson::onlyTrashed())->whereIn('id', $ids)->restore();
 
         return redirect()
             ->route('lessons.archive')
@@ -104,7 +108,7 @@ class LessonHubController extends Controller
             ],
         ])['ids'];
 
-        Lesson::onlyTrashed()->whereIn('id', $ids)->forceDelete();
+        $this->scopeLessonsForStaff($request, Lesson::onlyTrashed())->whereIn('id', $ids)->forceDelete();
 
         return redirect()
             ->route('lessons.archive')
@@ -130,6 +134,8 @@ class LessonHubController extends Controller
         ]);
 
         $module = Module::query()->findOrFail($data['module_id']);
+        $module->load('course');
+        $this->authorizeStaffCourse($request, $module->course);
         $data['sort_order'] = $data['sort_order'] ?? (($module->lessons()->max('sort_order') ?? 0) + 1);
         $data['slug'] = Lesson::uniqueSlugForModule($module->id, $data['title']);
         $data['created_by'] = $request->user()->id;
@@ -147,6 +153,7 @@ class LessonHubController extends Controller
     public function update(Request $request, Lesson $lesson): RedirectResponse
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         $data = $request->validate([
             'module_id' => ['sometimes', 'integer', 'exists:modules,id'],
             'title' => ['sometimes', 'string', 'max:255'],
@@ -189,6 +196,7 @@ class LessonHubController extends Controller
     public function duplicate(Request $request, Lesson $lesson): RedirectResponse
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         $lesson->load('contents');
 
         $copy = $lesson->replicate();
@@ -254,6 +262,7 @@ class LessonHubController extends Controller
     public function storeContent(Request $request, Lesson $lesson): RedirectResponse
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         $data = $request->validate([
             'content_type' => ['required', 'string', Rule::in([
                 'text', 'video', 'audio', 'image', 'pdf', 'note', 'example', 'exercise',
@@ -273,6 +282,7 @@ class LessonHubController extends Controller
     public function destroyContent(Request $request, Lesson $lesson, LessonContent $content): RedirectResponse
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         abort_unless((int) $content->lesson_id === (int) $lesson->id, 404);
         $content->delete();
 

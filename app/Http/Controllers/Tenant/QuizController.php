@@ -9,6 +9,7 @@ use App\Models\Question;
 use App\Models\Quiz;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +21,7 @@ class QuizController extends Controller
     {
         $this->authorizeStaffLesson($request, $lesson);
 
-        return Inertia::render('Tenant/Quizzes/Index', [
+        return Inertia::render('Tenant/Quizzes/LessonQuizzes', [
             'lesson' => $lesson->load(['module.course', 'quizzes.questions']),
         ]);
     }
@@ -38,10 +39,22 @@ class QuizController extends Controller
     {
         $this->staff($request);
         $this->authorizeStaffLesson($request, $lesson);
+        $lesson->load('module.course');
+
         $quizData = $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'time_limit_seconds' => ['nullable', 'integer'],
-            'randomize' => ['boolean'],
+            'description' => ['nullable', 'string'],
+            'type' => ['nullable', 'string', Rule::in(Quiz::TYPES)],
+            'time_limit_seconds' => ['nullable', 'integer', 'min:0'],
+            'pass_mark' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'max_attempts' => ['nullable', 'integer', 'min:1'],
+            'randomize' => ['sometimes', 'boolean'],
+            'is_shuffle_questions' => ['sometimes', 'boolean'],
+            'is_shuffle_answers' => ['sometimes', 'boolean'],
+            'show_results_instantly' => ['sometimes', 'boolean'],
+            'allow_retry' => ['sometimes', 'boolean'],
+            'negative_marking' => ['sometimes', 'boolean'],
+            'show_correct_after_finish' => ['sometimes', 'boolean'],
             'questions' => ['required', 'array', 'min:1'],
             'questions.*.type' => ['required', 'string'],
             'questions.*.points' => ['nullable', 'integer'],
@@ -50,8 +63,24 @@ class QuizController extends Controller
         ]);
         $questions = $quizData['questions'];
         unset($quizData['questions']);
+
+        $quizData['course_id'] = $lesson->module->course_id;
         $quizData['lesson_id'] = $lesson->id;
-        $quizData['randomize'] = $quizData['randomize'] ?? false;
+        $quizData['created_by'] = $request->user()->id;
+        $quizData['updated_by'] = $request->user()->id;
+        $quizData['type'] = $quizData['type'] ?? 'lesson';
+        $quizData['status'] = 'published';
+        $quizData['published_at'] = now();
+        $shuffle = $request->has('is_shuffle_questions')
+            ? $request->boolean('is_shuffle_questions')
+            : $request->boolean('randomize', false);
+        $quizData['is_shuffle_questions'] = $shuffle;
+        $quizData['is_shuffle_answers'] = $quizData['is_shuffle_answers'] ?? false;
+        $quizData['show_results_instantly'] = $quizData['show_results_instantly'] ?? true;
+        $quizData['allow_retry'] = $quizData['allow_retry'] ?? true;
+        $quizData['negative_marking'] = $quizData['negative_marking'] ?? false;
+        $quizData['show_correct_after_finish'] = $quizData['show_correct_after_finish'] ?? true;
+        unset($quizData['randomize']);
 
         $quiz = Quiz::query()->create($quizData);
         foreach ($questions as $i => $q) {
@@ -64,6 +93,8 @@ class QuizController extends Controller
                 'sort_order' => $i,
             ]);
         }
+
+        $quiz->update(['total_marks' => (int) $quiz->questions()->sum('points')]);
 
         return redirect()->route('lessons.quizzes.index', $lesson);
     }
@@ -84,11 +115,44 @@ class QuizController extends Controller
         $this->staff($request);
         abort_unless($quiz->lesson_id === $lesson->id, 404);
         $this->authorizeStaffLesson($request, $lesson);
+        $lesson->load('module.course');
+
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'time_limit_seconds' => ['nullable', 'integer'],
-            'randomize' => ['boolean'],
+            'description' => ['nullable', 'string'],
+            'type' => ['nullable', 'string', Rule::in(Quiz::TYPES)],
+            'time_limit_seconds' => ['nullable', 'integer', 'min:0'],
+            'pass_mark' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'max_attempts' => ['nullable', 'integer', 'min:1'],
+            'randomize' => ['sometimes', 'boolean'],
+            'is_shuffle_questions' => ['sometimes', 'boolean'],
+            'is_shuffle_answers' => ['sometimes', 'boolean'],
+            'show_results_instantly' => ['sometimes', 'boolean'],
+            'allow_retry' => ['sometimes', 'boolean'],
+            'negative_marking' => ['sometimes', 'boolean'],
+            'show_correct_after_finish' => ['sometimes', 'boolean'],
+            'status' => ['sometimes', 'string', 'in:draft,published'],
         ]);
+
+        if ($request->has('is_shuffle_questions')) {
+            $data['is_shuffle_questions'] = $request->boolean('is_shuffle_questions');
+        } elseif ($request->has('randomize')) {
+            $data['is_shuffle_questions'] = $request->boolean('randomize');
+        }
+        unset($data['randomize']);
+
+        if (array_key_exists('status', $data)) {
+            if ($data['status'] === 'published' && $quiz->published_at === null) {
+                $data['published_at'] = now();
+            }
+            if ($data['status'] === 'draft') {
+                $data['published_at'] = null;
+            }
+        }
+
+        $data['course_id'] = $lesson->module->course_id;
+        $data['updated_by'] = $request->user()->id;
+
         $quiz->update($data);
 
         return redirect()->route('lessons.quizzes.index', $lesson);

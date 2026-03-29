@@ -55,7 +55,14 @@ Route::middleware([
         Route::post('lessons/{lesson}/contents', [LessonHubController::class, 'storeContent'])->name('lessons.contents.store');
         Route::delete('lessons/{lesson}/contents/{content}', [LessonHubController::class, 'destroyContent'])->name('lessons.contents.destroy');
         Route::get('lessons', [LessonHubController::class, 'index'])->name('lessons.index');
-        Route::get('quizzes', [QuizHubController::class, 'index'])->name('tenant.quizzes.hub');
+        Route::get('quizzes/archive', [QuizHubController::class, 'archive'])->name('quizzes.archive');
+        Route::post('quizzes/bulk-archive', [QuizHubController::class, 'bulkArchive'])->name('quizzes.bulk-archive');
+        Route::post('quizzes/bulk-restore', [QuizHubController::class, 'bulkRestore'])->name('quizzes.bulk-restore');
+        Route::post('quizzes/bulk-force-delete', [QuizHubController::class, 'bulkForceDelete'])->name('quizzes.bulk-force-delete');
+        Route::post('quizzes', [QuizHubController::class, 'store'])->name('quizzes.store');
+        Route::patch('quizzes/{quiz}', [QuizHubController::class, 'update'])->name('quizzes.patch');
+        Route::post('quizzes/{quiz}/duplicate', [QuizHubController::class, 'duplicate'])->name('quizzes.duplicate');
+        Route::get('quizzes', [QuizHubController::class, 'index'])->name('quizzes.index');
         Route::get('settings', SettingsController::class)->name('tenant.settings');
         Route::get('progress', ProgressController::class)->name('tenant.progress');
 
@@ -72,6 +79,8 @@ Route::middleware([
         Route::resource('modules.lessons', LessonController::class);
         Route::resource('lessons.quizzes', QuizController::class)->except(['show']);
 
+        Route::get('quizzes/{quiz}/attempts/{attempt}', [QuizAttemptController::class, 'show'])->name('quizzes.attempts.show');
+        Route::get('quizzes/{quiz}/attempts/{attempt}/review', [QuizAttemptController::class, 'review'])->name('quizzes.attempts.review');
         Route::get('quizzes/{quiz}/take', [QuizAttemptController::class, 'create'])->name('quizzes.take');
         Route::post('quizzes/{quiz}/attempts', [QuizAttemptController::class, 'store'])->name('quizzes.attempts.store');
 

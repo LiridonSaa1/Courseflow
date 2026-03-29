@@ -100,7 +100,9 @@ class CourseController extends Controller
             ],
         ])['ids'];
 
-        Course::onlyTrashed()->whereIn('id', $ids)->forceDelete();
+        $this->scopeCoursesForStaff($request, Course::onlyTrashed())
+            ->whereIn('id', $ids)
+            ->forceDelete();
 
         return redirect()
             ->route('courses.archive')
@@ -139,6 +141,10 @@ class CourseController extends Controller
 
     public function show(Request $request, Course $course): Response
     {
+        if ($request->user()?->hasAnyRole(['owner', 'admin', 'teacher'])) {
+            $this->authorizeStaffCourse($request, $course);
+        }
+
         $course->load(['modules.lessons.quizzes']);
 
         return Inertia::render('Tenant/Courses/Show', ['course' => $course]);

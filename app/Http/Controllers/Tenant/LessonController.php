@@ -71,6 +71,9 @@ class LessonController extends Controller
 
         if ($request->user()?->hasAnyRole(['owner', 'admin', 'teacher'])) {
             $this->authorizeStaffModule($request, $module);
+            if ($this->staffTeacherId($request) !== null) {
+                $this->authorizeStaffLesson($request, $lesson);
+            }
         }
 
         $lesson->load(['module.course', 'quizzes', 'contents']);
@@ -108,6 +111,7 @@ class LessonController extends Controller
         $this->staff($request);
         abort_unless($lesson->module_id === $module->id, 404);
         $this->authorizeStaffModule($request, $module);
+        $this->authorizeStaffLesson($request, $lesson);
         $lesson->load('module.course');
 
         return Inertia::render('Tenant/Lessons/Edit', ['module' => $module, 'lesson' => $lesson]);
@@ -118,6 +122,7 @@ class LessonController extends Controller
         $this->staff($request);
         abort_unless($lesson->module_id === $module->id, 404);
         $this->authorizeStaffModule($request, $module);
+        $this->authorizeStaffLesson($request, $lesson);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'short_description' => ['nullable', 'string'],
@@ -150,6 +155,7 @@ class LessonController extends Controller
         $this->staff($request);
         abort_unless($lesson->module_id === $module->id, 404);
         $this->authorizeStaffModule($request, $module);
+        $this->authorizeStaffLesson($request, $lesson);
         $lesson->delete();
 
         return redirect()->route('modules.lessons.index', $module);
