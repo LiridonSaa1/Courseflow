@@ -113,9 +113,27 @@ const createDrawerOpen = ref(false);
 const editDrawerOpen = ref(false);
 const editingLessonId = ref(null);
 
+/** Prefill course/module when opening /lessons?create=1&course_id=&module_id= */
+const lessonPrefill = ref({ courseId: null, moduleId: null });
+
 onMounted(() => {
-    const q = new URLSearchParams(window.location.search).get('create');
-    if (q === '1' || q === 'true') {
+    const params = new URLSearchParams(window.location.search);
+    const create = params.get('create');
+    const courseParam = params.get('course_id');
+    const moduleParam = params.get('module_id');
+    if (courseParam != null && courseParam !== '') {
+        const n = parseInt(courseParam, 10);
+        if (!Number.isNaN(n)) {
+            lessonPrefill.value.courseId = n;
+        }
+    }
+    if (moduleParam != null && moduleParam !== '') {
+        const n = parseInt(moduleParam, 10);
+        if (!Number.isNaN(n)) {
+            lessonPrefill.value.moduleId = n;
+        }
+    }
+    if (create === '1' || create === 'true') {
         createDrawerOpen.value = true;
     }
 });
@@ -508,7 +526,14 @@ const headers = computed(() => {
                 @filter="filterDrawerOpen = true"
             />
 
-            <LessonCreateDrawer v-if="isStaff" v-model="createDrawerOpen" :courses="courses" :modules="modules" />
+            <LessonCreateDrawer
+                v-if="isStaff"
+                v-model="createDrawerOpen"
+                :courses="courses"
+                :modules="modules"
+                :prefill-course-id="lessonPrefill.courseId"
+                :prefill-module-id="lessonPrefill.moduleId"
+            />
 
             <LessonEditDrawer
                 v-if="isStaff"

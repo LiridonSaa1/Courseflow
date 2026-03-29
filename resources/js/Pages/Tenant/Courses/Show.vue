@@ -28,7 +28,12 @@ function destroyCourse() {
             <div v-for="mod in course.modules" :key="mod.id" class="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
                 <div class="flex justify-between">
                     <h2 class="font-semibold text-neutral-900">{{ mod.title }}</h2>
-                    <Link :href="`/modules/${mod.id}/lessons/create`" class="text-xs text-indigo-400">Add lesson</Link>
+                    <Link
+                        :href="`/lessons?create=1&course_id=${course.id}&module_id=${mod.id}`"
+                        class="text-xs text-indigo-400"
+                    >
+                        Add lesson
+                    </Link>
                 </div>
                 <ul class="mt-2 text-sm text-neutral-600">
                     <li v-for="les in mod.lessons" :key="les.id" class="flex justify-between py-1">

@@ -7,6 +7,9 @@ const model = defineModel({ type: Boolean, default: false });
 const props = defineProps({
     courses: { type: Array, default: () => [] },
     modules: { type: Array, default: () => [] },
+    /** When set (e.g. from /lessons?course_id=&module_id=), prefill the selects */
+    prefillCourseId: { type: Number, default: null },
+    prefillModuleId: { type: Number, default: null },
 });
 
 const form = useForm({
@@ -68,6 +71,43 @@ watch(courseIdUi, (courseId) => {
     }
 });
 
+function applyPrefillFromProps() {
+    const mid = props.prefillModuleId;
+    const cid = props.prefillCourseId;
+    if (mid != null && mid !== '') {
+        const mod = props.modules.find((m) => Number(m.id) === Number(mid));
+        if (mod) {
+            form.module_id = mod.id;
+            courseIdUi.value = mod.course_id;
+            return;
+        }
+    }
+    if (cid != null && cid !== '') {
+        courseIdUi.value = cid;
+    }
+}
+
+watch(
+    () => model.value,
+    (open) => {
+        if (open) {
+            applyPrefillFromProps();
+        } else {
+            form.clearErrors();
+        }
+    },
+);
+
+watch(
+    () => [props.prefillCourseId, props.prefillModuleId, props.modules],
+    () => {
+        if (model.value) {
+            applyPrefillFromProps();
+        }
+    },
+    { deep: true },
+);
+
 const canSubmit = computed(() => {
     const titleOk = String(form.title ?? '').trim().length > 0;
     const moduleOk = form.module_id != null && form.module_id !== '';
@@ -123,7 +163,8 @@ watch(model, (open) => {
                     <v-toolbar-title class="text-h6 font-weight-bold text-white pa-0"> New lesson </v-toolbar-title>
                 </div>
                 <p class="mb-0 text-body-2 text-white opacity-90">
-                    Choose a course and module, then set type and status. You can refine content from the lesson page.
+                    Every lesson belongs to a module (course → module → lesson). Pick course, then module — or open this
+                    drawer via URL: add course_id and module_id query params.
                 </p>
             </div>
         </v-toolbar>
@@ -153,6 +194,18 @@ watch(model, (open) => {
                     label="Module"
                     variant="outlined"
                 />
+
+                <v-alert
+                    v-if="courseIdUi != null && courseIdUi !== '' && moduleItems.length === 0"
+                    class="text-caption"
+                    density="compact"
+                    type="info"
+                    variant="tonal"
+                >
+                    No modules in this course yet. Add a module from the
+                    <a class="text-primary font-weight-medium" :href="`/courses/${courseIdUi}`">course page</a>
+                    first, then create the lesson.
+                </v-alert>
 
                 <v-text-field
                     v-model="form.title"
