@@ -1,5 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnsureCentralSuperAdmin;
+use App\Http\Middleware\EnsureTenantIsActive;
+use App\Http\Middleware\EnsureTenantSessionMatchesContext;
+use App\Http\Middleware\EnsureTenantStudentActive;
+use App\Http\Middleware\EnsureTenantTeacherActive;
+use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,14 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
-            \App\Http\Middleware\HandleInertiaRequests::class,
+            HandleInertiaRequests::class,
         ]);
         $middleware->redirectGuestsTo(fn () => tenant()
             ? route('tenant.login')
             : route('login'));
         $middleware->alias([
-            'tenant.active' => \App\Http\Middleware\EnsureTenantIsActive::class,
-            'central.admin' => \App\Http\Middleware\EnsureCentralSuperAdmin::class,
+            'tenant.active' => EnsureTenantIsActive::class,
+            'tenant.session' => EnsureTenantSessionMatchesContext::class,
+            'tenant.student.active' => EnsureTenantStudentActive::class,
+            'tenant.teacher.active' => EnsureTenantTeacherActive::class,
+            'central.admin' => EnsureCentralSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

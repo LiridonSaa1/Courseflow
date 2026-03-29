@@ -9,10 +9,10 @@ const props = defineProps({
     chartSignups: { type: Array, default: () => [0, 0, 0, 0, 0, 0, 0] },
 });
 
-const palette = ['bg-blue-500', 'bg-violet-500', 'bg-orange-500', 'bg-rose-500', 'bg-emerald-500', 'bg-amber-500'];
+const avatarColors = ['primary', 'secondary', 'teal', 'orange', 'pink', 'amber'];
 
-function rowIconClass(i) {
-    return palette[i % palette.length];
+function rowAvatarColor(i) {
+    return avatarColors[i % avatarColors.length];
 }
 
 const dateSubtitle = computed(() => {
@@ -134,170 +134,198 @@ function activate(id) {
     <AdminShellLayout>
         <Head title="Admin" />
 
-        <div class="px-6 pb-10 pt-8 sm:px-9 sm:pt-10 lg:px-11 lg:pt-11">
-            <!-- Header row — Figma community style -->
-            <div class="flex flex-wrap items-start justify-between gap-5">
-                <div>
-                    <h1 class="text-[28px] font-bold leading-tight tracking-tight text-[#222222] sm:text-[30px]">Workspaces</h1>
-                    <p class="mt-2 text-[15px] text-[#999999]">{{ dateSubtitle }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <div class="flex -space-x-2.5">
-                        <div
+        <v-container class="px-6 pb-10 pt-8 sm:px-9 sm:pt-10 lg:px-11 lg:pt-11" fluid>
+            <v-row align="start" class="mb-2" justify="space-between">
+                <v-col cols="12" md="auto">
+                    <h1 class="text-h4 font-weight-bold text-high-emphasis">Workspaces</h1>
+                    <p class="mt-2 text-body-1 text-medium-emphasis">{{ dateSubtitle }}</p>
+                </v-col>
+                <v-col class="d-flex align-center ga-2" cols="12" md="auto">
+                    <v-avatar-group class="me-1">
+                        <v-avatar
                             v-for="i in 4"
                             :key="i"
-                            class="flex size-10 items-center justify-center rounded-full border-[3px] border-white bg-gradient-to-br from-indigo-400 to-violet-600 text-[11px] font-semibold text-white shadow-sm"
+                            class="border-md border-surface"
+                            color="indigo-lighten-1"
+                            size="40"
                         >
-                            {{ String.fromCharCode(64 + i) }}
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        class="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-[#dddddd] bg-white text-lg font-light text-[#bbbbbb] transition hover:border-[#cccccc] hover:text-[#999999]"
-                        aria-label="Add"
-                    >
-                        +
-                    </button>
-                </div>
-            </div>
+                            <span class="text-caption font-weight-semibold">{{ String.fromCharCode(64 + i) }}</span>
+                        </v-avatar>
+                    </v-avatar-group>
+                    <v-btn aria-label="Add" color="grey-lighten-3" icon variant="flat">
+                        <v-icon color="grey">mdi-plus</v-icon>
+                    </v-btn>
+                </v-col>
+            </v-row>
 
-            <!-- Bar strip — pale bars + royal blue highlight -->
-            <div class="mt-10 flex h-[140px] items-end justify-between gap-1.5 px-0.5 sm:gap-2" aria-hidden="true">
-                <div
+            <div class="mt-10 d-flex align-end ga-2 px-1" style="height: 140px" aria-hidden="true">
+                <v-sheet
                     v-for="(bar, idx) in barMeta"
                     :key="idx"
-                    class="flex-1 rounded-t-[6px] transition-all duration-500"
-                    :class="bar.strong ? 'bg-[#1861ff]' : 'bg-[#dbeafe]'"
-                    :style="{ height: bar.h + 'px', opacity: bar.strong ? 1 : 0.65 }"
+                    class="flex-grow-1 rounded-ts-sm transition-swing"
+                    :color="bar.strong ? 'primary' : 'blue-lighten-5'"
+                    :height="bar.h"
+                    :style="{ opacity: bar.strong ? 1 : 0.65 }"
+                    rounded="0"
                 />
             </div>
 
-            <!-- Grouped list — Today / dated sections -->
-            <section id="workspaces" class="mt-12 scroll-mt-10">
+            <section id="workspaces" class="mt-12">
                 <template v-for="(group, gi) in tenantGroups" :key="gi">
-                    <div class="flex items-center justify-between border-b border-transparent pb-3 pt-2 first:pt-0">
-                        <h2 class="text-[15px] font-bold text-[#222222]">{{ group.label }}</h2>
-                        <button
-                            type="button"
-                            class="rounded-lg p-1.5 text-[#bbbbbb] transition hover:bg-neutral-100 hover:text-[#666666]"
-                            aria-label="More"
-                        >
-                            <span class="block text-xl leading-none tracking-tight">⋯</span>
-                        </button>
+                    <div class="d-flex align-center justify-space-between pb-3 pt-2">
+                        <h2 class="text-subtitle-1 font-weight-bold text-high-emphasis">{{ group.label }}</h2>
+                        <v-btn aria-label="More" color="grey" icon size="small" variant="text">
+                            <v-icon>mdi-dots-horizontal</v-icon>
+                        </v-btn>
                     </div>
-                    <ul class="border-t border-[#f0f0f0]">
-                        <li
+                    <v-list bg-color="transparent" class="pa-0" lines="three">
+                        <v-list-item
                             v-for="(t, ti) in group.items"
                             :key="t.id"
-                            class="flex items-center gap-4 border-b border-[#f5f5f5] py-5 last:border-b-0"
+                            class="border-b px-0 py-4"
+                            rounded="0"
                         >
-                            <div
-                                class="flex size-[52px] shrink-0 items-center justify-center rounded-full text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]"
-                                :class="rowIconClass(gi * 20 + ti)"
-                            >
-                                <svg class="size-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                                    />
-                                </svg>
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[16px] font-bold text-[#222222]">{{ tenantTitle(t) }}</p>
-                                <p class="mt-1 text-[14px] leading-snug text-[#999999]">
-                                    {{ tenantSubtitle(t) }}
-                                    <span v-if="t.domains?.[0]?.domain"> · {{ t.domains[0].domain }}</span>
-                                </p>
-                            </div>
-                            <div class="flex shrink-0 flex-col items-end gap-2">
-                                <span
-                                    class="rounded-full px-3 py-1 text-xs font-semibold"
-                                    :class="t.suspended_at ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'"
+                            <template #prepend>
+                                <v-avatar
+                                    :color="rowAvatarColor(gi * 20 + ti)"
+                                    size="52"
+                                    class="elevation-2"
                                 >
-                                    {{ t.suspended_at ? 'Suspended' : 'Active' }}
-                                </span>
-                                <button
-                                    v-if="!t.suspended_at"
-                                    type="button"
-                                    class="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                                    @click="suspend(t.id)"
-                                >
-                                    Suspend
-                                </button>
-                                <button
-                                    v-else
-                                    type="button"
-                                    class="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
-                                    @click="activate(t.id)"
-                                >
-                                    Activate
-                                </button>
-                            </div>
-                        </li>
-                    </ul>
+                                    <v-icon color="white" icon="mdi-office-building-outline" size="22" />
+                                </v-avatar>
+                            </template>
+
+                            <v-list-item-title class="text-body-1 font-weight-bold">
+                                {{ tenantTitle(t) }}
+                            </v-list-item-title>
+                            <v-list-item-subtitle class="text-wrap mt-1">
+                                {{ tenantSubtitle(t) }}
+                                <span v-if="t.domains?.[0]?.domain"> · {{ t.domains[0].domain }}</span>
+                            </v-list-item-subtitle>
+
+                            <template #append>
+                                <div class="d-flex flex-column align-end ga-2">
+                                    <v-chip
+                                        :color="t.suspended_at ? 'error' : 'success'"
+                                        density="comfortable"
+                                        size="small"
+                                        variant="tonal"
+                                    >
+                                        {{ t.suspended_at ? 'Suspended' : 'Active' }}
+                                    </v-chip>
+                                    <v-btn
+                                        v-if="!t.suspended_at"
+                                        color="error"
+                                        size="small"
+                                        variant="text"
+                                        @click="suspend(t.id)"
+                                    >
+                                        Suspend
+                                    </v-btn>
+                                    <v-btn
+                                        v-else
+                                        color="success"
+                                        size="small"
+                                        variant="text"
+                                        @click="activate(t.id)"
+                                    >
+                                        Activate
+                                    </v-btn>
+                                </div>
+                            </template>
+                        </v-list-item>
+                    </v-list>
                 </template>
-                <p v-if="!tenants.length" class="border-t border-[#f0f0f0] py-16 text-center text-[15px] text-[#999999]">
+                <v-sheet
+                    v-if="!tenants.length"
+                    border="t"
+                    class="py-16 text-center text-body-1 text-medium-emphasis"
+                    color="transparent"
+                >
                     No workspaces yet.
-                </p>
+                </v-sheet>
             </section>
 
-            <!-- Compact stats — under list -->
-            <div class="mt-12 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-[#f0f0f0] bg-[#fafafa] px-4 py-3.5">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-[#999999]">Tenants</p>
-                    <p class="mt-1 text-xl font-bold text-[#222222]">{{ stats.tenants }}</p>
-                </div>
-                <div class="rounded-2xl border border-[#f0f0f0] bg-[#fafafa] px-4 py-3.5">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-[#999999]">Active</p>
-                    <p class="mt-1 text-xl font-bold text-emerald-600">{{ stats.activeTenants }}</p>
-                </div>
-                <div class="rounded-2xl border border-[#f0f0f0] bg-[#fafafa] px-4 py-3.5">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-[#999999]">Revenue (¢)</p>
-                    <p class="mt-1 text-xl font-bold text-[#1861ff]">{{ stats.revenue_cents }}</p>
-                </div>
-            </div>
-        </div>
+            <v-row class="mt-12" dense>
+                <v-col cols="12" sm="4">
+                    <v-card border="thin" class="bg-grey-lighten-4" flat rounded="xl">
+                        <v-card-text>
+                            <p class="text-caption font-weight-semibold text-uppercase text-medium-emphasis">Tenants</p>
+                            <p class="text-h5 font-weight-bold mt-1">{{ stats.tenants }}</p>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
+                <v-col cols="12" sm="4">
+                    <v-card border="thin" class="bg-grey-lighten-4" flat rounded="xl">
+                        <v-card-text>
+                            <p class="text-caption font-weight-semibold text-uppercase text-medium-emphasis">Active</p>
+                            <p class="text-h5 font-weight-bold mt-1 text-success">{{ stats.activeTenants }}</p>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
+                <v-col cols="12" sm="4">
+                    <v-card border="thin" class="bg-grey-lighten-4" flat rounded="xl">
+                        <v-card-text>
+                            <p class="text-caption font-weight-semibold text-uppercase text-medium-emphasis">
+                                Revenue (¢)
+                            </p>
+                            <p class="text-h5 font-weight-bold mt-1 text-primary">{{ stats.revenue_cents }}</p>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
+            </v-row>
+        </v-container>
 
         <template #aside>
-            <div class="px-6 py-9 sm:px-8 sm:py-10">
-                <h2 class="text-[17px] font-bold leading-snug text-[#222222]">Where do plans go?</h2>
-                <p class="mt-1.5 text-[13px] leading-relaxed text-[#999999]">Share among your {{ stats.tenants }} workspaces (sample of 50).</p>
+            <v-container class="px-6 py-9 sm:px-8 sm:py-10" fluid>
+                <h2 class="text-h6 font-weight-bold text-high-emphasis">Where do plans go?</h2>
+                <p class="mt-2 text-body-2 text-medium-emphasis">
+                    Share among your {{ stats.tenants }} workspaces (sample of 50).
+                </p>
 
-                <ul class="mt-8 space-y-6">
-                    <li v-for="row in planDistribution" :key="row.name">
-                        <div class="flex items-baseline justify-between gap-2 text-[14px]">
-                            <span class="font-semibold text-[#222222]">{{ row.name }}</span>
-                            <span class="font-bold text-[#222222]">{{ row.count }}</span>
+                <v-list bg-color="transparent" class="mt-8 pa-0">
+                    <v-list-item v-for="row in planDistribution" :key="row.name" class="px-0 py-3">
+                        <div class="d-flex align-baseline justify-space-between ga-2 w-100">
+                            <span class="text-body-2 font-weight-semibold">{{ row.name }}</span>
+                            <span class="text-body-2 font-weight-bold">{{ row.count }}</span>
                         </div>
-                        <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-[#e8e8ed]">
-                            <div class="h-full rounded-full bg-emerald-500 transition-all" :style="{ width: row.pct + '%' }" />
-                        </div>
-                    </li>
-                    <li v-if="!planDistribution.length" class="text-[14px] text-[#999999]">No plan data.</li>
-                </ul>
+                        <v-progress-linear
+                            class="mt-3 rounded-pill"
+                            color="success"
+                            height="4"
+                            :model-value="row.pct"
+                            rounded
+                        />
+                    </v-list-item>
+                    <v-list-item v-if="!planDistribution.length" class="px-0 text-body-2 text-medium-emphasis">
+                        No plan data.
+                    </v-list-item>
+                </v-list>
 
-                <div class="mt-11 overflow-hidden rounded-[20px] bg-[#e8eef6] p-6 shadow-sm">
-                    <div class="mb-5 flex justify-center text-[#a8b8cc]">
-                        <svg class="size-[72px]" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <rect x="12" y="20" width="40" height="36" rx="2" class="fill-[#c5d3e3]" />
-                            <rect x="16" y="16" width="12" height="8" rx="1" class="fill-[#9dafc6]" />
-                            <path d="M28 12c0-2 2-4 4-4s4 2 4 4v4H28v-4z" class="fill-emerald-600" />
-                        </svg>
-                    </div>
-                    <h3 class="text-center text-[15px] font-bold text-[#222222]">Save more time</h3>
-                    <p class="mx-auto mt-2 max-w-[220px] text-center text-[12px] leading-relaxed text-[#777777]">
-                        Ensure MySQL users can create databases for new workspaces, and set Stripe price IDs for checkout.
-                    </p>
-                    <a
-                        href="/"
-                        class="mt-5 flex w-full items-center justify-center rounded-2xl bg-[#111111] py-3.5 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition hover:bg-black"
-                    >
-                        View tips
-                    </a>
-                </div>
-            </div>
+                <v-card class="mt-11 overflow-hidden" color="blue-grey-lighten-4" elevation="1" rounded="xl">
+                    <v-card-text class="pa-6">
+                        <div class="d-flex justify-center text-blue-grey-lighten-2 mb-5">
+                            <v-icon icon="mdi-monitor-dashboard" size="72" />
+                        </div>
+                        <h3 class="text-center text-subtitle-1 font-weight-bold">Save more time</h3>
+                        <p class="mx-auto mt-2 text-center text-caption text-medium-emphasis" style="max-width: 220px">
+                            Ensure MySQL users can create databases for new workspaces, and set Stripe price IDs for
+                            checkout.
+                        </p>
+                        <v-btn
+                            block
+                            class="mt-5 text-caption font-weight-bold"
+                            color="grey-darken-4"
+                            href="/"
+                            rounded="xl"
+                            size="large"
+                            variant="flat"
+                        >
+                            View tips
+                        </v-btn>
+                    </v-card-text>
+                </v-card>
+            </v-container>
         </template>
     </AdminShellLayout>
 </template>

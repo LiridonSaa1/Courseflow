@@ -52,7 +52,7 @@ class TenantProvisioner
         $centralUser->update(['tenant_id' => $tenant->id]);
 
         $tenant->run(function () use ($data) {
-            foreach (['owner', 'teacher', 'student'] as $role) {
+            foreach (['owner', 'admin', 'teacher', 'student'] as $role) {
                 Role::query()->firstOrCreate(['name' => $role, 'guard_name' => 'web']);
             }
 

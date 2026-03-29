@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\AuthorizesTenantRoles;
 use App\Models\Lesson;
 use App\Models\Question;
 use App\Models\Quiz;
@@ -13,8 +14,12 @@ use Inertia\Response;
 
 class QuizController extends Controller
 {
+    use AuthorizesTenantRoles;
+
     public function index(Request $request, Lesson $lesson): Response
     {
+        $this->authorizeStaffLesson($request, $lesson);
+
         return Inertia::render('Tenant/Quizzes/Index', [
             'lesson' => $lesson->load(['module.course', 'quizzes.questions']),
         ]);
@@ -23,6 +28,7 @@ class QuizController extends Controller
     public function create(Request $request, Lesson $lesson): Response
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         $lesson->load(['module.course']);
 
         return Inertia::render('Tenant/Quizzes/Create', ['lesson' => $lesson]);
@@ -31,6 +37,7 @@ class QuizController extends Controller
     public function store(Request $request, Lesson $lesson): RedirectResponse
     {
         $this->staff($request);
+        $this->authorizeStaffLesson($request, $lesson);
         $quizData = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'time_limit_seconds' => ['nullable', 'integer'],
@@ -65,6 +72,7 @@ class QuizController extends Controller
     {
         $this->staff($request);
         abort_unless($quiz->lesson_id === $lesson->id, 404);
+        $this->authorizeStaffLesson($request, $lesson);
         $quiz->load('questions');
         $lesson->load('module.course');
 
@@ -75,6 +83,7 @@ class QuizController extends Controller
     {
         $this->staff($request);
         abort_unless($quiz->lesson_id === $lesson->id, 404);
+        $this->authorizeStaffLesson($request, $lesson);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'time_limit_seconds' => ['nullable', 'integer'],
@@ -89,13 +98,9 @@ class QuizController extends Controller
     {
         $this->staff($request);
         abort_unless($quiz->lesson_id === $lesson->id, 404);
+        $this->authorizeStaffLesson($request, $lesson);
         $quiz->delete();
 
         return redirect()->route('lessons.quizzes.index', $lesson);
-    }
-
-    protected function staff(Request $request): void
-    {
-        abort_unless($request->user()->hasAnyRole(['owner', 'teacher']), 403);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\AuthorizesTenantRoles;
 use App\Models\Course;
 use App\Models\Module;
 use Illuminate\Http\RedirectResponse;
@@ -12,8 +13,12 @@ use Inertia\Response;
 
 class ModuleController extends Controller
 {
+    use AuthorizesTenantRoles;
+
     public function index(Request $request, Course $course): Response
     {
+        $this->authorizeStaffCourse($request, $course);
+
         return Inertia::render('Tenant/Modules/Index', [
             'course' => $course->load(['modules.lessons']),
         ]);
@@ -22,6 +27,7 @@ class ModuleController extends Controller
     public function create(Request $request, Course $course): Response
     {
         $this->staff($request);
+        $this->authorizeStaffCourse($request, $course);
         $course->load('modules');
 
         return Inertia::render('Tenant/Modules/Create', ['course' => $course]);
@@ -45,6 +51,7 @@ class ModuleController extends Controller
     {
         $this->staff($request);
         abort_unless($module->course_id === $course->id, 404);
+        $this->authorizeStaffCourse($request, $course);
 
         return Inertia::render('Tenant/Modules/Edit', ['course' => $course, 'module' => $module]);
     }
@@ -53,6 +60,7 @@ class ModuleController extends Controller
     {
         $this->staff($request);
         abort_unless($module->course_id === $course->id, 404);
+        $this->authorizeStaffCourse($request, $course);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer'],
@@ -66,13 +74,9 @@ class ModuleController extends Controller
     {
         $this->staff($request);
         abort_unless($module->course_id === $course->id, 404);
+        $this->authorizeStaffCourse($request, $course);
         $module->delete();
 
         return redirect()->route('courses.show', $course);
-    }
-
-    protected function staff(Request $request): void
-    {
-        abort_unless($request->user()->hasAnyRole(['owner', 'teacher']), 403);
     }
 }

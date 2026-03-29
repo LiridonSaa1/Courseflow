@@ -9,12 +9,21 @@ class StudentProgress extends Model
 {
     protected $table = 'student_progress';
 
-    protected $fillable = ['user_id', 'lesson_id', 'percent', 'completed_at'];
+    protected $fillable = [
+        'user_id',
+        'lesson_id',
+        'percent',
+        'completed_at',
+        'started_at',
+        'last_position',
+        'state',
+    ];
 
     protected function casts(): array
     {
         return [
             'completed_at' => 'datetime',
+            'started_at' => 'datetime',
         ];
     }
 

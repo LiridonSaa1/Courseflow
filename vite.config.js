@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import vue from '@vitejs/plugin-vue';
+import vuetify from 'vite-plugin-vuetify';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,6 +16,7 @@ export default defineConfig({
         }),
         tailwindcss(),
         vue(),
+        vuetify({ autoImport: true }),
     ],
     resolve: {
         alias: {

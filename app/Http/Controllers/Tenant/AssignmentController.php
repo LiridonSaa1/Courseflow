@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\AuthorizesTenantRoles;
 use App\Models\Assignment;
 use App\Models\Submission;
 use Illuminate\Http\RedirectResponse;
@@ -12,6 +13,8 @@ use Inertia\Response;
 
 class AssignmentController extends Controller
 {
+    use AuthorizesTenantRoles;
+
     public function create(Request $request, Assignment $assignment): Response
     {
         return Inertia::render('Tenant/Assignments/Submit', ['assignment' => $assignment->load('lesson')]);
@@ -32,7 +35,9 @@ class AssignmentController extends Controller
 
     public function grade(Request $request, Submission $submission): RedirectResponse
     {
-        abort_unless($request->user()->hasAnyRole(['owner', 'teacher']), 403);
+        $this->staff($request);
+        $submission->load('assignment.lesson.module.course');
+        $this->authorizeStaffCourse($request, $submission->assignment->lesson->module->course);
         $data = $request->validate([
             'score' => ['required', 'integer', 'min:0', 'max:100'],
             'teacher_feedback' => ['nullable', 'string'],

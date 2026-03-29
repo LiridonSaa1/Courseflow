@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\AuthorizesTenantRoles;
 use App\Models\Attendance;
 use App\Models\LiveSession;
 use App\Models\StudyClass;
@@ -14,11 +15,20 @@ use Inertia\Response;
 
 class LiveSessionController extends Controller
 {
+    use AuthorizesTenantRoles;
+
     public function index(Request $request): Response
     {
-        abort_unless($request->user()->hasAnyRole(['owner', 'teacher']), 403);
-        $sessions = LiveSession::query()->with('studyClass')->latest()->get();
-        $classes = StudyClass::query()->with('course')->get();
+        $this->staff($request);
+        $tid = $this->staffTeacherId($request);
+        $sessionsQuery = LiveSession::query()->with('studyClass')->latest();
+        $classesQuery = StudyClass::query()->with('course');
+        if ($tid !== null) {
+            $sessionsQuery->whereHas('studyClass', fn ($q) => $q->where('teacher_id', $tid));
+            $classesQuery->where('teacher_id', $tid);
+        }
+        $sessions = $sessionsQuery->get();
+        $classes = $classesQuery->get();
 
         return Inertia::render('Tenant/LiveSessions/Index', [
             'sessions' => $sessions,
@@ -28,13 +38,19 @@ class LiveSessionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless($request->user()->hasAnyRole(['owner', 'teacher']), 403);
+        $this->staff($request);
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'class_id' => ['nullable', 'exists:classes,id'],
             'starts_at' => ['nullable', 'date'],
             'meeting_url' => ['nullable', 'url'],
         ]);
+        if (($tid = $this->staffTeacherId($request)) !== null && ! empty($data['class_id'])) {
+            abort_unless(
+                StudyClass::query()->whereKey($data['class_id'])->where('teacher_id', $tid)->exists(),
+                403
+            );
+        }
         $data['join_token'] = Str::uuid()->toString();
         LiveSession::query()->create($data);
 

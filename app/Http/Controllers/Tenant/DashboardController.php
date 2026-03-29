@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Tenant\Concerns\AuthorizesTenantRoles;
 use App\Models\Course;
 use App\Models\Lesson;
 use App\Models\LiveSession;
-use App\Models\QuizAttempt;
 use App\Models\Quiz;
-use App\Models\StudentProgress;
+use App\Models\QuizAttempt;
 use App\Models\Student;
+use App\Models\StudentProgress;
 use App\Models\Teacher;
 use App\Models\UserStat;
 use Carbon\Carbon;
@@ -19,10 +20,16 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    use AuthorizesTenantRoles;
+
     public function index(Request $request): Response
     {
         $user = $request->user();
-        $courses = Course::query()->withCount(['modules', 'studyClasses'])->latest()->take(10)->get();
+        $coursesQuery = $this->scopeCoursesForStaff($request, Course::query())
+            ->withCount(['modules', 'studyClasses'])
+            ->latest()
+            ->take(10);
+        $courses = $coursesQuery->get();
         $progress = StudentProgress::query()
             ->with('lesson:id,title')
             ->where('user_id', $user->id)
@@ -39,15 +46,39 @@ class DashboardController extends Controller
                 ->count();
         }
 
-        $workspaceStats = [
-            'courses' => Course::query()->count(),
-            'students' => Student::query()->count(),
-            'teachers' => Teacher::query()->count(),
-            'lessons' => Lesson::query()->count(),
-            'quizzes' => Quiz::query()->count(),
-            'liveSessions' => LiveSession::query()->count(),
-            'attempts' => QuizAttempt::query()->count(),
-        ];
+        $tid = $this->staffTeacherId($request);
+        if ($tid !== null) {
+            $workspaceStats = [
+                'courses' => Course::query()->where('teacher_id', $tid)->count(),
+                'students' => Student::query()
+                    ->withoutTrashed()
+                    ->whereHas('studyClasses', fn ($q) => $q->where('teacher_id', $tid))
+                    ->count(),
+                'teachers' => 1,
+                'lessons' => Lesson::query()
+                    ->whereHas('module.course', fn ($q) => $q->where('teacher_id', $tid))
+                    ->count(),
+                'quizzes' => Quiz::query()
+                    ->whereHas('lesson.module.course', fn ($q) => $q->where('teacher_id', $tid))
+                    ->count(),
+                'liveSessions' => LiveSession::query()
+                    ->whereHas('studyClass', fn ($q) => $q->where('teacher_id', $tid))
+                    ->count(),
+                'attempts' => QuizAttempt::query()
+                    ->whereHas('quiz.lesson.module.course', fn ($q) => $q->where('teacher_id', $tid))
+                    ->count(),
+            ];
+        } else {
+            $workspaceStats = [
+                'courses' => Course::query()->count(),
+                'students' => Student::query()->withoutTrashed()->count(),
+                'teachers' => Teacher::query()->withoutTrashed()->count(),
+                'lessons' => Lesson::query()->count(),
+                'quizzes' => Quiz::query()->count(),
+                'liveSessions' => LiveSession::query()->count(),
+                'attempts' => QuizAttempt::query()->count(),
+            ];
+        }
 
         return Inertia::render('Tenant/Dashboard', [
             'roleNames' => $user->getRoleNames()->values(),

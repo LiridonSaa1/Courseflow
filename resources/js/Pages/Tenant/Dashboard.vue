@@ -29,7 +29,10 @@ const productImages = [
 const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const canManageCourses = computed(
-    () => props.roleNames.includes('owner') || props.roleNames.includes('teacher'),
+    () =>
+        props.roleNames.includes('owner') ||
+        props.roleNames.includes('admin') ||
+        props.roleNames.includes('teacher'),
 );
 const workspaceStats = computed(() => props.workspaceStats || {});
 
